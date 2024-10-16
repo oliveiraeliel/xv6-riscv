@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "riscv.h": "c",
+        "types.h": "c",
+        "user.h": "c",
+        "defs.h": "c",
+        "stat.h": "c",
+        "param.h": "c",
+        "fcntl.h": "c",
+        "proc.h": "c",
+        "proc_metrics.h": "c",
+        "spinlock.h": "c"
+    }
+}

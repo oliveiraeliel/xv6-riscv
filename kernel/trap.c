@@ -163,11 +163,20 @@ kerneltrap()
 void
 clockintr()
 {
+  struct proc *p = myproc();
+
   if(cpuid() == 0){
     acquire(&tickslock);
     ticks++;
     wakeup(&ticks);
     release(&tickslock);
+  }
+
+  if (p != 0 && p->state == RUNNING)
+  {
+    acquire(&p->lock);
+    p->ticks++;
+    release(&p->lock);
   }
 
   // ask for the next timer interrupt. this also clears
