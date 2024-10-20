@@ -27,7 +27,7 @@ void printf_fixed_precision(uint64 number, int precision)
 {
     int integer = number / precision;
     int decimal = number % precision;
-    printf("%d.%d\n", integer, decimal);    
+    printf("%d.%d\n", integer, decimal);
 }
 
 void read_metrics(const char *file_path, struct proc_metrics *metrics)
@@ -188,7 +188,6 @@ uint64 mem_overhead(struct proc_metrics *metrics, int size)
 
 void compute_metrics(struct proc_metrics *raw_metrics, struct metrics *metrics, int size, int xticks)
 {
-    // printf("debug\n");
     metrics->io_latency = io_lat_norm(raw_metrics, size);
     metrics->throughput = throughput(raw_metrics, size, xticks);
     metrics->proc_fairness = proc_fairness(raw_metrics, size);
@@ -200,19 +199,28 @@ void compute_metrics(struct proc_metrics *raw_metrics, struct metrics *metrics, 
                         (15 * metrics->fs_efficiency) +
                         (10 * metrics->mem_overhead));
 
-    // printf("io_latency: %ld\n", metrics->io_latency);
-    // printf("throughput: %ld\n", metrics->throughput);
-    // printf("proc_fairness: %ld\n", metrics->proc_fairness);
-    // printf("fs_efficiency: %ld\n", metrics->fs_efficiency);
-    // printf("mem_overhead: %ld\n", metrics->mem_overhead);
+    printf("io_latency: ");
+    printf_fixed_precision(metrics->io_latency, 100 * FIXED_PRECISION);
+
+    printf("throughput: ");
+    printf_fixed_precision(metrics->throughput, 100 * FIXED_PRECISION);
+
+    printf("proc_fairness: ");
+    printf_fixed_precision(metrics->proc_fairness, 100 * FIXED_PRECISION);
+
+    printf("fs_efficiency: ");
+    printf_fixed_precision(metrics->fs_efficiency, 100 * FIXED_PRECISION);
+
+    printf("mem_overhead: ");
+    printf_fixed_precision(metrics->mem_overhead, 100 * FIXED_PRECISION);
+
     printf("overall: ");
     printf_fixed_precision(metrics->overall, 100 * FIXED_PRECISION);
-    // printf("\n--------\n\n");
 }
 
 int main(int argc, char *argv[])
 {
-    struct metrics *metrics = malloc(sizeof(struct metrics) * ROUNDS);
+    // struct metrics *metrics = malloc(sizeof(struct mioetrics) * ROUNDS);
     // printf("---------%ld\n", sizeof(metrics));
     struct proc_metrics raw_metrics[NUM_PROCS];
     int
@@ -298,7 +306,7 @@ int main(int argc, char *argv[])
         }
         // printf("dale dele dole\n");
         int count = 0;
-        for (int k = 0; k < NUM_PROCS; k++)
+        for (int j = 0; j < NUM_PROCS; j++)
         {
             int status;
             wait(&status);
@@ -309,14 +317,12 @@ int main(int argc, char *argv[])
 
         xticks = uptime() - xticks;
 
-        printf("count: %d\n", count);
-        sleep(10);
-
-        for (int k = NUM_PROCS - 1; k >= 0; k--)
+        printf("Round %d/%d\n\n", i + 1, ROUNDS);
+        for (int j = 0; j < NUM_PROCS; j++)
         {
-            int fd = pipe_fd[k][0];
-            // struct proc_metrics m;
-            if (read(fd, &raw_metrics[k], sizeof(struct proc_metrics)) != sizeof(struct proc_metrics))
+            
+            int fd = pipe_fd[j][0];
+            if (read(fd, &raw_metrics[j], sizeof(struct proc_metrics)) != sizeof(struct proc_metrics))
             {
                 printf("Error reading from pipe\n");
                 close(fd);
@@ -324,9 +330,20 @@ int main(int argc, char *argv[])
             }
             close(fd);
             num_raw_metrics++;
+            printf("raw_metrics[%d].io_metrics.total_ticks: %ld\n", j, raw_metrics[j].io_metrics.total_ticks);
+            printf("raw_metrics[%d].fs_metrics.total_ticks_read: %ld\n", j, raw_metrics[j].fs_metrics.total_ticks_read);
+            printf("raw_metrics[%d].fs_metrics.total_ticks_write: %ld\n", j, raw_metrics[j].fs_metrics.total_ticks_write);
+            printf("raw_metrics[%d].fs_metrics.total_ticks_delete: %ld\n", j, raw_metrics[j].fs_metrics.total_ticks_delete);
+            printf("raw_metrics[%d].mem_metrics.total_ticks_access: %ld\n", j, raw_metrics[j].mem_metrics.total_ticks_access);
+            printf("raw_metrics[%d].mem_metrics.total_ticks_alloc: %ld\n", j, raw_metrics[j].mem_metrics.total_ticks_alloc);
+            printf("raw_metrics[%d].mem_metrics.total_ticks_free: %ld\n", j, raw_metrics[j].mem_metrics.total_ticks_free);
+            printf("raw_metrics[%d].ticks: %ld\n", j, raw_metrics[j].ticks);
+            printf("raw_metrics[%d].start_ticks: %ld\n", j, raw_metrics[j].start_ticks);
+            printf("raw_metrics[%d].end_ticks: %ld\n", j, raw_metrics[j].end_ticks);
+            printf("\n");
         }
-        printf("Round %d/%d\n", i + 1, ROUNDS);
-        compute_metrics(raw_metrics, &metrics[i], NUM_PROCS, xticks);
+        // compute_metrics(raw_metrics, &metrics[i], NUM_PROCS, xticks);
+        // printf("\n\n");
     }
 
     exit(0);
