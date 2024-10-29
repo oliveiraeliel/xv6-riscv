@@ -94,7 +94,7 @@ $U/initcode: $U/initcode.S
 tags: $(OBJS) _init
 	etags *.S *.c
 
-ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o
+ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o $U/utils.o
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
@@ -172,6 +172,22 @@ QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
+# CFLAGS += -DOPTIMIZED
+
+# ifdef OPTIMIZE
+# CFLAGS += -DOPTIMIZED
+# endif
+
+
+# OPTIMIZE = 0
+# ifeq ($(OPTIMIZE),1)
+# CFLAGS += -DOPTIMIZED
+# endif
+
+qemu-optimized: CFLAGS += -DOPTIMIZED
+qemu-optimized: $K/kernel fs.img
+	$(QEMU) $(QEMUOPTS)
+
 qemu: $K/kernel fs.img
 	$(QEMU) $(QEMUOPTS)
 
@@ -181,4 +197,3 @@ qemu: $K/kernel fs.img
 qemu-gdb: $K/kernel .gdbinit fs.img
 	@echo "*** Now run 'gdb' in another window." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
-

@@ -1,4 +1,7 @@
 #include "types.h"
+#include "param.h"
+
+// #define NPROC 1000
 
 struct io_latency_metrics
 {
@@ -15,6 +18,13 @@ struct fs_eficiency_metrics
     uint64 total_ticks_write;  // total de ticks de syscalls write
     uint64 total_ticks_read;   // total de ticks de syscalls read
     uint64 total_ticks_delete; // total de ticks de syscalls delete
+};
+
+struct throughput
+{
+    int pid;
+    int terminated_last_second; // numero de processos terminados no ultimo segundo
+    uint8 puts[NPROC];          // puts[i] é o número de vezes em que i processos foram encerrados em 1 segundo
 };
 
 struct memory_management_overhead
@@ -36,10 +46,12 @@ struct proc_metrics
     uint64 end_ticks;   // fim do processo
     uint64 ticks;
 
-    struct io_latency_metrics io_metrics;          // metricas de IO
-    struct fs_eficiency_metrics fs_metrics;        // metricas de eficiencia de FS
-    struct memory_management_overhead mem_metrics; // metricas de overhead de gerenciamento de memoria
+    struct io_latency_metrics           io_metrics;     // metricas de IO
+    struct fs_eficiency_metrics         fs_metrics;     // metricas de eficiencia de FS
+    struct memory_management_overhead   mem_metrics;    // metricas de overhead de gerenciamento de memoria
+    // struct throughput                   throughput;     // metricas de throughput
 };
+
 
 struct proc_metrics *get_my_proc_metrics();
 

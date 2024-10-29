@@ -1,5 +1,4 @@
 #include "kernel/types.h"
-#include "kernel/stat.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
 #include "kernel/proc_metrics.h"
@@ -11,7 +10,6 @@
 #define BUFFER_SIZE 50
 #define FIXED_PRECISION 100000
 #define MAX_UINT64 0xFFFFFFFFFFFFFFFF
-#define HZ 100
 
 struct metrics
 {
@@ -30,26 +28,6 @@ void printf_fixed_precision(uint64 number, int precision)
     printf("%d.%d\n", integer, decimal);
 }
 
-void read_metrics(const char *file_path, struct proc_metrics *metrics)
-{
-    int file = open(file_path, O_RDONLY);
-    if (file < 0)
-    {
-        printf("Could not open the file %s\n", file_path);
-        close(file);
-        exit(1);
-    }
-
-    if (read(file, metrics, sizeof(struct proc_metrics)) != sizeof(struct proc_metrics) && 1 == 0)
-    {
-        printf("Error reading from file %s\n", file_path);
-        close(file);
-        exit(1);
-    }
-
-    close(file);
-}
-
 int contar_digitos(int num)
 {
     int count = 0;
@@ -63,7 +41,7 @@ int contar_digitos(int num)
     return count;
 }
 
-void int_to_str(int num, char *str)
+void itoa(int num, char *str)
 {
     int is_negative = 0;
     if (num < 0)
@@ -99,252 +77,243 @@ void int_to_str(int num, char *str)
 
 uint64 io_lat_norm(struct proc_metrics *metrics, int size)
 {
-    uint64 max_lat = 0, min_lat = MAX_UINT64;
-    uint64 total_lat = 0;
-
+    uint64 max_lat = 0, min_lat = MAX_UINT64, tlat;
     for (int i = 0; i < size; i++)
     {
-        if (metrics[i].io_metrics.total_ticks > max_lat)
-            max_lat = metrics[i].io_metrics.total_ticks;
-        if (metrics[i].io_metrics.total_ticks < min_lat)
-            min_lat = metrics[i].io_metrics.total_ticks;
-        total_lat += metrics[i].io_metrics.total_ticks;
+        tlat = metrics[i].io_metrics.total_ticks;
+        if (tlat > max_lat)
+            max_lat = tlat;
+        if (tlat < min_lat)
+            min_lat = tlat;
     }
-    total_lat *= FIXED_PRECISION;
-    total_lat /= size;
-    uint64 num = total_lat - min_lat * FIXED_PRECISION;
-    uint64 dem = max_lat - min_lat;
-    if (dem == 0)
-        return FIXED_PRECISION;
-    return FIXED_PRECISION - (num / dem);
+    uint64 io_lat_norm_mean = 0;
+    for (int i = 0; i < size; i++)
+    {
+        tlat = metrics[i].io_metrics.total_ticks;
+        io_lat_norm_mean += (FIXED_PRECISION - ((tlat - min_lat) * FIXED_PRECISION) / (max_lat - min_lat)) / size;
+    }
+    return io_lat_norm_mean;
 }
 
-uint64 throughput(struct proc_metrics *metrics, int size, int xticks)
+uint64 throughput(uint8 *puts_table, int size)
 {
-    uint64 min_ticks = MAX_UINT64, max_ticks = 0;
-    for (int i = 0; i < size; i++)
+    uint64 max_puts = 0, min_puts = MAX_UINT64;
+
+    if (!puts_table[0])
+        min_puts = 0;
+
+    int i = 1, total = 0;
+    while (total < size)
     {
-        uint64 ticks = metrics[i].end_ticks - metrics[i].start_ticks;
-        if (xticks > max_ticks)
-            max_ticks = ticks;
-        if (xticks < min_ticks)
-            min_ticks = ticks;
+        if (puts_table[i])
+        {
+            if (i > max_puts)
+                max_puts = i;
+            if (i < min_puts)
+                min_puts = i;
+        }
+        total += i * puts_table[i];
+        i++;
     }
-    uint64 num = FIXED_PRECISION * (xticks - min_ticks);
-    uint64 dem = max_ticks - min_ticks;
-    return FIXED_PRECISION - (num / dem);
+    uint64 throughput_mean = 0;
+    for (int j = 1; j < i; j++)
+    {
+        throughput_mean += puts_table[j] * ((FIXED_PRECISION -
+                                             ((j - min_puts) * FIXED_PRECISION) / (max_puts - min_puts)));
+    }
+    throughput_mean /= (size + puts_table[0]);
+    return throughput_mean;
 }
 
 uint64 proc_fairness(struct proc_metrics *metrics, int size)
 {
-    uint64 sx = 0, sx2 = 0;
+    uint64 sx = 0, sx2 = 0, x;
     for (int i = 0; i < size; i++)
     {
-        sx += metrics[i].ticks;
-        sx2 += metrics[i].ticks * metrics[i].ticks;
+        x = metrics[i].end_ticks - metrics[i].start_ticks;
+        sx += x;
+        sx2 += x * x;
     }
 
-    sx *= FIXED_PRECISION * HZ;
+    sx *= FIXED_PRECISION * sx;
     return sx / (size * sx2);
 }
 
 uint64 fs_efficiency(struct proc_metrics *metrics, int size)
 {
-    uint64 efs_min = MAX_UINT64, efs_max = 0;
-    uint64 avg = 0;
+    uint64 efs_min = MAX_UINT64, efs_max = 0, tefs;
     for (int i = 0; i < size; i++)
     {
-        uint64 efs = metrics[i].fs_metrics.total_ticks_read + metrics[i].fs_metrics.total_ticks_write + metrics[i].fs_metrics.total_ticks_delete;
-        if (efs > efs_max)
-            efs_max = efs;
-        if (efs < efs_min)
-            efs_min = efs;
-        avg += efs;
+        tefs = metrics[i].fs_metrics.total_ticks_read +
+               metrics[i].fs_metrics.total_ticks_write +
+               metrics[i].fs_metrics.total_ticks_delete;
+        if (tefs > efs_max)
+            efs_max = tefs;
+        if (tefs < efs_min)
+            efs_min = tefs;
     }
-    avg *= FIXED_PRECISION;
-    avg /= size;
-    uint64 num = avg - efs_min * FIXED_PRECISION;
-    uint64 dem = efs_max - efs_min;
-    return FIXED_PRECISION - (num / dem);
+    uint64 fs_efficiency_mean = 0;
+    for (int i = 0; i < size; i++)
+    {
+        tefs = metrics[i].fs_metrics.total_ticks_read +
+               metrics[i].fs_metrics.total_ticks_write +
+               metrics[i].fs_metrics.total_ticks_delete;
+        fs_efficiency_mean += (FIXED_PRECISION -
+                               ((tefs - efs_min) * FIXED_PRECISION) / (efs_max - efs_min)) /
+                              size;
+    }
+    return fs_efficiency_mean;
 }
 
 uint64 mem_overhead(struct proc_metrics *metrics, int size)
 {
-    uint64 mo_min = MAX_UINT64, mo_max = 0;
-    uint64 avg = 0;
+    uint64 mo_min = MAX_UINT64, mo_max = 0, tmo;
     for (int i = 0; i < size; i++)
     {
-        uint64 mo = metrics[i].mem_metrics.total_ticks_access + metrics[i].mem_metrics.total_ticks_alloc + metrics[i].mem_metrics.total_ticks_free;
-        if (mo > mo_max)
-            mo_max = mo;
-        if (mo < mo_min)
-            mo_min = mo;
-        avg += mo;
+        tmo = metrics[i].mem_metrics.total_ticks_access +
+              metrics[i].mem_metrics.total_ticks_alloc +
+              metrics[i].mem_metrics.total_ticks_free;
+        if (tmo > mo_max)
+            mo_max = tmo;
+        if (tmo < mo_min)
+            mo_min = tmo;
     }
-    avg *= FIXED_PRECISION;
-    avg /= size;
-    return FIXED_PRECISION - (avg - mo_min * FIXED_PRECISION) / (mo_max - mo_min);
+    uint64 mem_overhead_mean = 0;
+    for (int i = 0; i < size; i++)
+    {
+        tmo = metrics[i].mem_metrics.total_ticks_access +
+              metrics[i].mem_metrics.total_ticks_alloc +
+              metrics[i].mem_metrics.total_ticks_free;
+        mem_overhead_mean += (FIXED_PRECISION -
+                              ((tmo - mo_min) * FIXED_PRECISION) / (mo_max - mo_min)) /
+                             size;
+    }
+    return mem_overhead_mean;
 }
 
-void compute_metrics(struct proc_metrics *raw_metrics, struct metrics *metrics, int size, int xticks)
+uint64 compute_metrics(struct proc_metrics *raw_metrics, int size, uint8 *puts_table, int verbose)
 {
-    metrics->io_latency = io_lat_norm(raw_metrics, size);
-    metrics->throughput = throughput(raw_metrics, size, xticks);
-    metrics->proc_fairness = proc_fairness(raw_metrics, size);
-    metrics->fs_efficiency = fs_efficiency(raw_metrics, size);
-    metrics->mem_overhead = mem_overhead(raw_metrics, size);
-    metrics->overall = ((20 * metrics->io_latency) +
-                        (30 * metrics->throughput) +
-                        (25 * metrics->proc_fairness) +
-                        (15 * metrics->fs_efficiency) +
-                        (10 * metrics->mem_overhead));
+    struct metrics metrics;
+    metrics.io_latency = io_lat_norm(raw_metrics, size);
+    metrics.throughput = throughput(puts_table, size);
+    metrics.proc_fairness = proc_fairness(raw_metrics, size);
+    metrics.fs_efficiency = fs_efficiency(raw_metrics, size);
+    metrics.mem_overhead = mem_overhead(raw_metrics, size);
+    metrics.overall = ((20 * metrics.io_latency) +
+                       (30 * metrics.throughput) +
+                       (25 * metrics.proc_fairness) +
+                       (15 * metrics.fs_efficiency) +
+                       (10 * metrics.mem_overhead));
 
-    printf("io_latency: ");
-    printf_fixed_precision(metrics->io_latency, 100 * FIXED_PRECISION);
+    if (verbose)
+    {
+        printf("io_latency: ");
+        printf_fixed_precision(metrics.io_latency, 100 * FIXED_PRECISION);
 
-    printf("throughput: ");
-    printf_fixed_precision(metrics->throughput, 100 * FIXED_PRECISION);
+        printf("throughput: ");
+        printf_fixed_precision(metrics.throughput, 100 * FIXED_PRECISION);
 
-    printf("proc_fairness: ");
-    printf_fixed_precision(metrics->proc_fairness, 100 * FIXED_PRECISION);
+        printf("proc_fairness: ");
+        printf_fixed_precision(metrics.proc_fairness, 100 * FIXED_PRECISION);
 
-    printf("fs_efficiency: ");
-    printf_fixed_precision(metrics->fs_efficiency, 100 * FIXED_PRECISION);
+        printf("fs_efficiency: ");
+        printf_fixed_precision(metrics.fs_efficiency, 100 * FIXED_PRECISION);
 
-    printf("mem_overhead: ");
-    printf_fixed_precision(metrics->mem_overhead, 100 * FIXED_PRECISION);
+        printf("mem_overhead: ");
+        printf_fixed_precision(metrics.mem_overhead, 100 * FIXED_PRECISION);
 
-    printf("overall: ");
-    printf_fixed_precision(metrics->overall, 100 * FIXED_PRECISION);
+        printf("overall: ");
+        printf_fixed_precision(metrics.overall, 100 * FIXED_PRECISION);
+    }
+    return metrics.overall;
 }
-
 int main(int argc, char *argv[])
 {
-    // struct metrics *metrics = malloc(sizeof(struct mioetrics) * ROUNDS);
-    // printf("---------%ld\n", sizeof(metrics));
+
+#ifdef OPTIMIZED
+    printf("\nOptimized Version Experiment. Run with `make clean && make qemu` to see the non-optimized version.\n\n");
+#else
+    printf("\nNon-Optimized Version Experiment. Run with `make clean && make qemu-optimized` to see the optimized version.\n\n");
+#endif
+
     struct proc_metrics raw_metrics[NUM_PROCS];
-    int
-        num_raw_metrics = 0,
-        //  num_metrics = 0,
-        seed = 0;
-    char buffer1[BUFFER_SIZE], buffer2[BUFFER_SIZE], filename[BUFFER_SIZE];
-    int pipe_fd[NUM_PROCS][2];
-    int xticks;
+    uint8 puts_table[NPROC];
+    uint64 perform;
+    uint64 avg_perform = 0;
+    int seed = 0;
+    int pid;
+    char buffer[BUFFER_SIZE], filename[BUFFER_SIZE];
 
     for (int i = 0; i < ROUNDS; i++)
     {
-        xticks = uptime();
-
+        observeprocputs();
         for (int j = 0; j < NUM_PROCS_IOBOUND; j++)
         {
-            if (pipe(pipe_fd[j]) < 0)
-            {
-                printf("Could not create pipe for the iobound proc %d\n", j);
-                exit(1);
-            }
-
-            memset(buffer1, 0, BUFFER_SIZE);
+            memset(buffer, 0, BUFFER_SIZE);
             memset(filename, 0, BUFFER_SIZE);
 
-            int_to_str(i, buffer1);
-            strcpy(filename, buffer1);
+            itoa(i, buffer);
+            strcpy(filename, buffer);
             strcat(filename, "_");
 
-            int_to_str(j, buffer1);
-            strcat(filename, buffer1);
+            itoa(j, buffer);
+            strcat(filename, buffer);
             strcat(filename, "_IOBOUND");
 
-            int_to_str(seed++, buffer1);
-            int pid = fork();
-            if (pid < 0)
+            itoa(seed++, buffer);
+
+            if ((pid = fork()) < 0)
                 exit(1);
 
             if (pid == 0)
             {
-                // printf("--------\n");
-                close(pipe_fd[j][0]);
-                int_to_str(pipe_fd[j][1], buffer2);
-                // lines <seed> <filename> <pipe_fd>
-                char *args[] = {"lines", buffer1, filename, buffer2, (char *)0};
+                // lines <seed> <filename>
+                char *args[] = {"lines", buffer, filename, (char *)0};
                 if (exec("lines", args) < 0)
                     exit(1);
-            }
-            else
-            {
-                close(pipe_fd[j][1]);
             }
         }
 
         for (int j = 0; j < NUM_PROCS_CPUBOUND; j++)
         {
-            if (pipe(pipe_fd[j + NUM_PROCS_IOBOUND]) < 0)
-            {
-                printf("Could not create pipe for the cpubound proc %d\n", i + j);
-                exit(1);
-            }
+            itoa(seed++, buffer);
 
-            int_to_str(seed++, buffer1);
-            int_to_str(pipe_fd[j + NUM_PROCS_IOBOUND][1], buffer2);
-
-            int pid = fork();
-            if (pid < 0)
+            if ((pid = fork()) < 0)
                 exit(1);
 
             if (pid == 0)
             {
-                // printf("--------\n");
-                close(pipe_fd[j + NUM_PROCS_IOBOUND][0]);
-                // shortest_path <seed> <pipe_fd>
-                char *args[] = {"shortest_path", buffer1, buffer2, (char *)0};
+                // shortest_path <seed>
+                char *args[] = {"shortest_path", buffer, (char *)0};
                 if (exec("shortest_path", args) < 0)
                     exit(1);
             }
-            else
-            {
-                close(pipe_fd[j + NUM_PROCS_IOBOUND][1]);
-            }
         }
-        // printf("dale dele dole\n");
-        int count = 0;
+
         for (int j = 0; j < NUM_PROCS; j++)
         {
             int status;
-            wait(&status);
-            if (status != 0)
-                exit(1);
-            count++;
-        }
-
-        xticks = uptime() - xticks;
-
-        printf("Round %d/%d\n\n", i + 1, ROUNDS);
-        for (int j = 0; j < NUM_PROCS; j++)
-        {
-            
-            int fd = pipe_fd[j][0];
-            if (read(fd, &raw_metrics[j], sizeof(struct proc_metrics)) != sizeof(struct proc_metrics))
+            if ((pid = waitandgetmetrics(&status, &raw_metrics[j])) < 0)
             {
-                printf("Error reading from pipe\n");
-                close(fd);
+                printf("Error on waitandgetmetrics\n");
                 exit(1);
             }
-            close(fd);
-            num_raw_metrics++;
-            printf("raw_metrics[%d].io_metrics.total_ticks: %ld\n", j, raw_metrics[j].io_metrics.total_ticks);
-            printf("raw_metrics[%d].fs_metrics.total_ticks_read: %ld\n", j, raw_metrics[j].fs_metrics.total_ticks_read);
-            printf("raw_metrics[%d].fs_metrics.total_ticks_write: %ld\n", j, raw_metrics[j].fs_metrics.total_ticks_write);
-            printf("raw_metrics[%d].fs_metrics.total_ticks_delete: %ld\n", j, raw_metrics[j].fs_metrics.total_ticks_delete);
-            printf("raw_metrics[%d].mem_metrics.total_ticks_access: %ld\n", j, raw_metrics[j].mem_metrics.total_ticks_access);
-            printf("raw_metrics[%d].mem_metrics.total_ticks_alloc: %ld\n", j, raw_metrics[j].mem_metrics.total_ticks_alloc);
-            printf("raw_metrics[%d].mem_metrics.total_ticks_free: %ld\n", j, raw_metrics[j].mem_metrics.total_ticks_free);
-            printf("raw_metrics[%d].ticks: %ld\n", j, raw_metrics[j].ticks);
-            printf("raw_metrics[%d].start_ticks: %ld\n", j, raw_metrics[j].start_ticks);
-            printf("raw_metrics[%d].end_ticks: %ld\n", j, raw_metrics[j].end_ticks);
-            printf("\n");
         }
-        // compute_metrics(raw_metrics, &metrics[i], NUM_PROCS, xticks);
-        // printf("\n\n");
+
+        getprocputs(puts_table, NUM_PROCS);
+
+        perform = compute_metrics(raw_metrics, NUM_PROCS, puts_table, 0);
+        avg_perform += perform / ROUNDS;
+        if (i < 9)
+            printf("# Round:  %d/%d        |      # System Performance: ", i + 1, ROUNDS);
+        else
+            printf("# Round: %d/%d        |      # System Performance: ", i + 1, ROUNDS);
+        printf_fixed_precision(perform, 100 * FIXED_PRECISION);
     }
+
+    printf("\n# Average System Performance: ");
+    printf_fixed_precision(avg_perform, 100 * FIXED_PRECISION);
+    printf("\n");
 
     exit(0);
 }

@@ -4,100 +4,17 @@
 #include "kernel/proc_metrics.h"
 #include "kernel/fcntl.h"
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-
-#define MAX_NODES 200
-#define MAX_EDGE_WEIGHT 500
-#define NUM_GRAPHS 1000
-#define MIN_NODES 100
-#define MAX_NODES 200
-#define MIN_EDGES 50
-#define MAX_EDGES 400
-#define INFINITY 1000000
-#define LEFT(i) (i * 2 + 1)
-#define RIGHT(i) (i * 2 + 2)
-#define PARENT(i) ((i - 1) / 2)
-
-static unsigned long seed = 0;
-
-unsigned int
-rand_()
-{
-    // const unsigned int a = 1103515245;
-    // const unsigned int c = 12345;
-    // const unsigned int m = 0x80000000;
-
-    // seed = (a * seed + c) % m;
-
-    // return seed;
-    long hi, lo, x;
-    x = (seed % 0x7ffffffe) + 1;
-    hi = x / 127773;
-    lo = x % 127773;
-    x = 16807 * lo - 2836 * hi;
-    if (x < 0)
-        x += 0x7fffffff;
-    x--;
-    seed = x;
-    return seed;
-}
-
-void srand_(unsigned long new_seed)
-{
-    seed = new_seed;
-}
-
-void read_metrics(const char *file_path, struct proc_metrics *metrics)
-{
-    int file = open(file_path, O_RDONLY);
-    if (file < 0)
-    {
-        printf("Could not open the file");
-        exit(1);
-    }
-
-    if (read(file, metrics, sizeof(struct proc_metrics)) < 0)
-    {
-        printf("Error reading from file");
-        close(file);
-        exit(1);
-    }
-
-    close(file);
-}
-
-void save_metrics(char *save_path, struct proc_metrics *metrics)
-{
-    int file;
-
-    file = open(save_path, O_RDWR | O_CREATE);
-
-    if (file <= 0)
-    {
-        printf("Could not create the file %s\n", save_path);
-        close(file);
-        exit(1);
-    }
-
-    if (write(file, metrics, sizeof(struct proc_metrics)) != sizeof(struct proc_metrics))
-    {
-        printf("Error on write\n");
-        close(file);
-        exit(1);
-    }
-
-    close(file);
-    // struct proc_metrics m;
-    // read_metrics(save_path, &m);
-
-    // if (strcmp(save_path, "1_0_CPUBOUND.metrics") == 0)
-    // {
-    //     printf("Total ticks: %ld\n", m.io_metrics.total_ticks);
-    //     printf("Total ticks read: %ld\n", m.fs_metrics.total_ticks_read);
-    // }
-}
+#define MIN_NODES           100
+#define MAX_NODES           200
+#define MAX_EDGE_WEIGHT     2000
+#define NUM_GRAPHS          1000
+#define MAX_NODES           200
+#define MIN_EDGES           50
+#define MAX_EDGES           400
+#define INFINITY            0x7FFFFFFF
+#define LEFT(i)             (i * 2 + 1)
+#define RIGHT(i)            (i * 2 + 2)
+#define PARENT(i)           ((i - 1) / 2)
 
 struct digraph
 {
@@ -479,29 +396,15 @@ void solve()
 
 int main(int argc, char *argv[])
 {
-    if (argc != 3)
+    if (argc != 2 && argc != 3)
     {
         printf("Invalid parameters.\n");
         exit(1);
     }
-    int pipe_fd = atoi(argv[2]);
+
     srand_(atoi(argv[1]));
     for (int i = 0; i < NUM_GRAPHS; i++)
         solve();
-        
-    struct proc_metrics metrics;
-    if (getprocmetrics(&metrics) < 0)
-    {
-        printf("Error on getprocmetrics\n");
-        exit(1);
-    }
-    // metrics.end_ticks = uptime();
-    if (pipe_fd != -1) 
-        if (write(pipe_fd, &metrics, sizeof(struct proc_metrics)) != sizeof(struct proc_metrics)) {
-            printf("Error writing to pipe\n");
-            close(pipe_fd);
-            exit(1);
-        }
-    close(pipe_fd);
+
     exit(0);
 }

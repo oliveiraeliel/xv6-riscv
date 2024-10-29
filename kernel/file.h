@@ -7,6 +7,12 @@ struct file {
   struct inode *ip;  // FD_INODE and FD_DEVICE
   uint off;          // FD_INODE
   short major;       // FD_DEVICE
+
+  char **cache;
+  int cache_size;
+  int cache_page_size;
+  int cache_page_count;
+  int cached;
 };
 
 #define major(dev)  ((dev) >> 16 & 0xFFFF)

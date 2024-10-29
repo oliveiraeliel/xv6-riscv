@@ -114,3 +114,76 @@ sys_getprocmetrics(void)
 
   return 0;
 }
+
+uint64
+sys_getprocmetricsbypid(void)
+{
+  uint64 pid;
+  uint64 addr;
+  argaddr(0, &addr);
+  argaddr(1, &pid);
+
+  if (addr < 0)
+    return -1;
+
+  // struct proc_metrics *metrics = get_proc_metrics(pid);
+
+  // if (copyout(p->pagetable, addr, (char *)metrics, sizeof(*metrics)) < 0)
+  //   return -1;
+
+  return 0;
+}
+
+uint64
+sys_observeprocputs(void)
+{
+  struct proc *p = myproc();
+  init_puts_table();
+  set_proc_to_observe_puts(p);
+  return 0;
+}
+
+uint64
+sys_getprocputs(void)
+{
+  struct proc *p = myproc();
+  uint8 *puts_table;
+  uint64 addr;
+  int num_procs;
+
+  argaddr(0, &addr);
+  argint(1, &num_procs);
+
+  if (addr < 0)
+    return -1;
+
+  for (;;) {
+    int sum = 0;
+    for (int i = 1; i < num_procs; i++)
+      sum += i * get_puts_table()[i];
+    if (sum == num_procs)
+      break;
+  }
+
+  puts_table = get_puts_table();
+
+  if (copyout(p->pagetable, addr, (char *)puts_table, sizeof(uint8) * NPROC) < 0)
+    return -1;
+  
+  return 0;
+}
+
+uint64
+sys_waitandgetmetrics(void) {
+  uint64 addr1, addr2;
+  argaddr(0, &addr1);
+  argaddr(1, &addr2);
+  // printf("Waiting for pid, addr1: %ld, addr2: %ld\n", addr1, addr2);
+  int pid = wait(addr1);
+
+  // printf("Copying metrics for pid: %d\n", pid);
+
+  if (pid < 0 || copyout(myproc()->pagetable, addr2, (char *)get_proc_metrics(pid), sizeof(struct proc_metrics)) < 0)
+    return -1;
+  return pid;
+}

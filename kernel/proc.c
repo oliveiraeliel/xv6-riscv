@@ -7,13 +7,17 @@
 #include "defs.h"
 #include "syscall.h"
 #include "proc_metrics.h"
-// #include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
 struct proc_metrics proc_metrics[NPROC];
+
+uint8 puts_table[NPROC];  // puts[i] é o número de vezes em que i processos foram encerrados em 1 segundo
+uint8 terminated_procs_current_sec;
+struct spinlock terminated_procs_current_sec_lock;
+struct proc *proc_to_observe_puts;
 
 struct proc *initproc;
 
@@ -142,12 +146,29 @@ int allocpid()
   // release(&pid_lock);
 
   // return nextpid;
+  // int pid;
+
+  // acquire(&pid_lock);
+  // pid = nextpid;
+  // nextpid = nextpid + 1;
+  // release(&pid_lock);
+
+  // init_proc_metrics(pid);
+
+  // return pid;
   int pid;
+  int trials = 0;
 
   acquire(&pid_lock);
-  pid = nextpid;
-  nextpid = nextpid + 1;
+  do {
+    pid = nextpid % NPROC;
+    nextpid = nextpid + 1;
+    trials++;
+  } while (proc[pid].state != ZOMBIE && proc[pid].state != UNUSED && trials < NPROC);
   release(&pid_lock);
+
+  if (trials >= NPROC) 
+    panic("allocpid: no free pid\n");
 
   init_proc_metrics(pid);
 
@@ -409,6 +430,16 @@ void reparent(struct proc *p)
 void exit(int status)
 {
   struct proc *p = myproc();
+
+  if (p->parent != 0 && p->parent == proc_to_observe_puts) {
+    acquire(&terminated_procs_current_sec_lock);
+    terminated_procs_current_sec++;
+    release(&terminated_procs_current_sec_lock);
+  }
+
+  acquire(&tickslock);
+  proc_metrics[p->pid].end_ticks = ticks;
+  release(&tickslock);
 
   if (p == initproc)
     panic("init exiting");
@@ -781,4 +812,61 @@ struct proc_metrics *get_my_proc_metrics()
   proc_metrics[p->pid].end_ticks = ticks;
   proc_metrics[p->pid].ticks = p->ticks;
   return &proc_metrics[p->pid];
+}
+
+// int *get_terminated_procs_at_second() {
+//   // return terminated_procs_at_second;
+// }
+
+
+// int *init_terminated_procs_at_second() {
+  
+// }
+
+// struct proc *getprocbypid(int pid)
+// {
+//   return &proc[pid];
+// }
+
+// void compute_terminated_procs(void)
+// {
+//   int terminated;
+//   for (int i = 0; i < observedprocs_size; i++) {
+//     if (observedprocs[i] != 0){
+//       terminated = proc_metrics[observedprocs[i].pid].throughput.terminated_last_second;
+//       proc_metrics[observedprocs[i].pid].throughput.puts[terminated]++;
+//       proc_metrics[observedprocs[i].pid].throughput.terminated_last_second = 0;
+//     }
+//   }
+// }
+
+void init_puts_table()
+{
+  proc_to_observe_puts = 0;
+  terminated_procs_current_sec = 0;
+  memset(puts_table, 0, sizeof(uint8) * NPROC);
+}
+
+void set_proc_to_observe_puts(struct proc *p)
+{
+  proc_to_observe_puts = p;
+}
+
+uint8 *get_puts_table(void) {
+  return puts_table;
+}
+
+void set_terminated_procs_current_sec(uint8 value)
+{
+  terminated_procs_current_sec = value;
+}
+
+uint8 get_terminated_procs_current_sec(void)
+{
+  return terminated_procs_current_sec;
+}
+
+struct proc *get_proc_to_observe_puts(void)
+{
+  return proc_to_observe_puts;
 }
