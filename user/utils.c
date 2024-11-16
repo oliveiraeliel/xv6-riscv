@@ -16,7 +16,7 @@ rand_()
         x += 0x7fffffff;
     x--;
     seed = x;
-    return seed;
+    return seed % 0x7fffffff;
 }
 
 void srand_(unsigned long new_seed)

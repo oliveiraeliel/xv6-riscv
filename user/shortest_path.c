@@ -456,9 +456,9 @@ void solve()
     num_edges = rand_() % (MAX_EDGES - MIN_EDGES) + MIN_EDGES;
 
     // int time = uptime();
-    path = malloc(sizeof(int) * num_nodes);
+    path = malloc(sizeof(uint) * num_nodes);
     // alloc_time += uptime() - time;
-    memset(path, -1, sizeof(int) * num_nodes);
+    memset(path, -1, sizeof(uint) * num_nodes);
     malloc_successfull_or_panic(path);
 
     // u = rand_() % num_nodes;
