@@ -26,3 +26,4 @@
 #define SYS_getprocputs         25
 #define SYS_waitandgetmetrics   26
 #define SYS_getprocmetricsbypid 27
+#define SYS_uptimeproc          28

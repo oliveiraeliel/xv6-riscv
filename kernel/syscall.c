@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "syscall.h"
 #include "defs.h"
+#include "proc_metrics.h"
 
 // Fetch the uint64 at addr from the current process.
 int
@@ -107,6 +108,7 @@ extern uint64 sys_observeprocputs(void);
 extern uint64 sys_getprocputs(void);
 extern uint64 sys_waitandgetmetrics(void);
 extern uint64 sys_getprocmetricsbypid(void);
+extern uint64 sys_uptimeproc(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -138,22 +140,75 @@ static uint64 (*syscalls[])(void) = {
 [SYS_getprocputs]           sys_getprocputs,
 [SYS_waitandgetmetrics]     sys_waitandgetmetrics,
 [SYS_getprocmetricsbypid]   sys_getprocmetricsbypid,
+[SYS_uptimeproc]            sys_uptimeproc,
 };
+
+void handle_time(int syscall_num, uint64 time, struct proc *p)
+{
+  struct proc_metrics *proc_metrics = get_proc_metrics(p->pid);
+
+  switch (syscall_num)
+  {
+  case SYS_read:
+  case SYS_lseek:
+  case SYS_fstat:
+    proc_metrics->fs_metrics.n_read++;
+    proc_metrics->fs_metrics.total_ticks_read += time;
+    break;
+
+  case SYS_write:
+  case SYS_pipe:
+  case SYS_chdir:
+  case SYS_mkdir:
+  case SYS_mknod:
+  case SYS_open:
+  case SYS_exec:
+  case SYS_dup:
+  case SYS_link:
+    proc_metrics->fs_metrics.n_write++;
+    proc_metrics->fs_metrics.total_ticks_write += time;
+    break;
+
+  case SYS_close:
+  case SYS_unlink:
+    proc_metrics->fs_metrics.n_delete++;
+    proc_metrics->fs_metrics.total_ticks_delete += time;
+    break;
+
+  default:
+    break;
+  }
+}
 
 void
 syscall(void)
 {
   int num;
+  uint64 time;
   struct proc *p = myproc();
 
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
+    time = p->ticks;
+    // p->off_scheduler_time = 0;
+    // cycles = r_time();
     p->trapframe->a0 = syscalls[num]();
+    // uint64 endcycle = r_time();
+    // cycles = endcycle - p->off_scheduler_time - cycles;
+    time = p->ticks - time;
+    // printf("cycles %ld\n", cycles);
+    // printf("r_time: %ld   p->last_cycle: %ld\n", r_time(), p->last_cycle);
+    handle_time(num, time, p);
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);
     p->trapframe->a0 = -1;
   }
 }
+
+// 1500
+// 1500 -> 2000
+// 3000
+// 1500 + 1000

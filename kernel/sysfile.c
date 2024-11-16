@@ -57,237 +57,109 @@ fdalloc(struct file *f)
 uint64
 sys_dup(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->io_metrics.num_io_calls++;
-  proc_metrics->fs_metrics.n_write++;
-
   struct file *f;
   int fd;
 
   if (argfd(0, 0, &f) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
+    return -1;
   if ((fd = fdalloc(f)) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
+    return -1;
   filedup(f);
-  ret = fd;
-  // return fd;
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->io_metrics.total_ticks += xticks;
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-
-  return ret;
+  return fd;
 }
 
 uint64
 sys_read(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->io_metrics.num_io_calls++;
-  proc_metrics->fs_metrics.n_read++;
-
   struct file *f;
   int n;
-  uint64 q;
+  uint64 p;
 
-  argaddr(1, &q);
+  argaddr(1, &p);
   argint(2, &n);
   if (argfd(0, 0, &f) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
+    return -1;
 
 #ifdef OPTIMIZED
   if (f->cached)
-    ret = filecachedread(f, q, n);
+    return filecachedread(f, p, n);
   else
-    ret = fileread(f, q, n);
+    return fileread(f, p, n);
 #else
-  ret = fileread(f, q, n);
+  return fileread(f, p, n);
 #endif
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->io_metrics.total_ticks += xticks;
-  proc_metrics->fs_metrics.total_ticks_read += xticks;
-
-  return ret;
 }
 
 uint64
 sys_write(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->io_metrics.num_io_calls++;
-  proc_metrics->fs_metrics.n_write++;
-
   struct file *f;
   int n;
-  uint64 q;
+  uint64 p;
 
-  argaddr(1, &q);
+  argaddr(1, &p);
   argint(2, &n);
   if (argfd(0, 0, &f) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
+    return -1;
 
 #ifdef OPTIMIZED
   if (f->cached)
-    ret = filecachedwrite(f, q, n);
+    return filecachedwrite(f, p, n);
   else
-    ret = filewrite(f, q, n);
+    return filewrite(f, p, n);
 #else
-  ret = filewrite(f, q, n);
+  return filewrite(f, p, n);
 #endif
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->io_metrics.total_ticks += xticks;
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-
-  return ret;
 }
 
 uint64
 sys_close(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->io_metrics.num_io_calls++;
-  proc_metrics->fs_metrics.n_delete++;
-
   int fd;
   struct file *f;
 
   if (argfd(0, &fd, &f) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
+    return -1;
   myproc()->ofile[fd] = 0;
 #ifdef OPTIMIZED
   if (f->cached)
     if (filecachedflush(f) < 0)
     {
-      ret = -1;
       fileclose(f);
-      goto return_block;
+      return -1;
     }
 #endif
-
   fileclose(f);
-  ret = 0;
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->io_metrics.total_ticks += xticks;
-  proc_metrics->fs_metrics.total_ticks_delete += xticks;
-
-  return ret;
+  return 0;
 }
 
 uint64
 sys_fstat(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->fs_metrics.n_read++;
-
   struct file *f;
   uint64 st; // user pointer to struct stat
 
   argaddr(1, &st);
   if (argfd(0, 0, &f) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
-  ret = filestat(f, st);
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->fs_metrics.total_ticks_read += xticks;
-
-  return ret;
+    return -1;
+  return filestat(f, st);
 }
 
 // Create the path new as a link to the same inode as old.
 uint64
 sys_link(void)
 {
-  struct proc_metrics *proc_metrics;
-  uint64 ret;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->fs_metrics.n_write++;
-
   char name[DIRSIZ], new[MAXPATH], old[MAXPATH];
   struct inode *dp, *ip;
 
   if (argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
-  {
-    // return -1;
-    ret = -1;
-    goto return_block;
-  }
+    return -1;
 
   begin_op();
   if ((ip = namei(old)) == 0)
   {
     end_op();
-    // return -1;
+    return -1;
   }
 
   ilock(ip);
@@ -295,9 +167,7 @@ sys_link(void)
   {
     iunlockput(ip);
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
 
   ip->nlink++;
@@ -317,9 +187,7 @@ sys_link(void)
 
   end_op();
 
-  ret = 0;
-  goto return_block;
-  // return 0;
+  return 0;
 
 bad:
   ilock(ip);
@@ -327,16 +195,7 @@ bad:
   iupdate(ip);
   iunlockput(ip);
   end_op();
-  // return -1;
-  ret = -1;
-  goto return_block;
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-
-  return ret;
+  return -1;
 }
 
 // Is the directory dp empty except for "." and ".." ?
@@ -359,33 +218,19 @@ isdirempty(struct inode *dp)
 uint64
 sys_unlink(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-  proc_metrics->fs_metrics.n_delete++;
-
   struct inode *ip, *dp;
   struct dirent de;
   char name[DIRSIZ], path[MAXPATH];
   uint off;
 
   if (argstr(0, path, MAXPATH) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
+    return -1;
 
   begin_op();
   if ((dp = nameiparent(path, name)) == 0)
   {
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
 
   ilock(dp);
@@ -422,21 +267,12 @@ sys_unlink(void)
 
   end_op();
 
-  ret = 0;
-  goto return_block;
+  return 0;
 
 bad:
   iunlockput(dp);
   end_op();
-  ret = -1;
-  goto return_block;
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->fs_metrics.total_ticks_delete += xticks;
-
-  return ret;
+  return -1;
 }
 
 static struct inode *
@@ -505,13 +341,6 @@ fail:
 uint64
 sys_open(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
   char path[MAXPATH];
   int fd, omode;
   struct file *f;
@@ -520,10 +349,7 @@ sys_open(void)
 
   argint(1, &omode);
   if ((n = argstr(0, path, MAXPATH)) < 0)
-  {
-    ret = -1;
-    // return -1;
-  }
+    return -1;
 
   begin_op();
 
@@ -533,9 +359,7 @@ sys_open(void)
     if (ip == 0)
     {
       end_op();
-      ret = -1;
-      goto return_block;
-      // return -1;
+      return -1;
     }
   }
   else
@@ -543,18 +367,14 @@ sys_open(void)
     if ((ip = namei(path)) == 0)
     {
       end_op();
-      ret = -1;
-      goto return_block;
-      // return -1;
+      return -1;
     }
     ilock(ip);
     if (ip->type == T_DIR && omode != O_RDONLY)
     {
       iunlockput(ip);
       end_op();
-      ret = -1;
-      goto return_block;
-      // return -1;
+      return -1;
     }
   }
 
@@ -562,9 +382,7 @@ sys_open(void)
   {
     iunlockput(ip);
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
 
   if ((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0)
@@ -573,9 +391,7 @@ sys_open(void)
       fileclose(f);
     iunlockput(ip);
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
 
   if (ip->type == T_DEVICE)
@@ -591,7 +407,6 @@ sys_open(void)
   f->ip = ip;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
-  f->cached = (omode & O_CREATE);
 
   if ((omode & O_TRUNC) && ip->type == T_FILE)
   {
@@ -600,40 +415,14 @@ sys_open(void)
 
   iunlock(ip);
   end_op();
-
-  ret = fd;
-  goto return_block;
-  // return fd;
-return_block:
-  xticks = p->ticks - xticks;
-
-  if ((omode & (O_RDONLY | O_RDWR)) != 0)
-  {
-    proc_metrics->fs_metrics.n_read++;
-    proc_metrics->fs_metrics.total_ticks_read += xticks;
-  }
-
-  if ((omode & (O_WRONLY | O_RDWR | O_CREATE | O_TRUNC)) != 0)
-  {
-    proc_metrics->fs_metrics.n_write++;
-    proc_metrics->fs_metrics.total_ticks_write += xticks;
-  }
-
-  return ret;
+  if (omode & O_CREATE)
+    f->cached = 1;
+  return fd;
 }
 
 uint64
 sys_mkdir(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->fs_metrics.n_write++;
-
   char path[MAXPATH];
   struct inode *ip;
 
@@ -641,20 +430,11 @@ sys_mkdir(void)
   if (argstr(0, path, MAXPATH) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0)
   {
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
   iunlockput(ip);
   end_op();
-  ret = 0;
-  // return 0;
-return_block:
-  xticks = p->ticks - xticks;
-
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-
-  return ret;
+  return 0;
 }
 
 uint64
@@ -663,15 +443,6 @@ sys_mknod(void)
   struct inode *ip;
   char path[MAXPATH];
   int major, minor;
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->fs_metrics.n_write++;
 
   begin_op();
   argint(1, &major);
@@ -680,18 +451,11 @@ sys_mknod(void)
       (ip = create(path, T_DEVICE, major, minor)) == 0)
   {
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
   iunlockput(ip);
   end_op();
-
-return_block:
-  xticks = p->ticks - xticks;
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-  return ret;
-  // return 0;
+  return 0;
 }
 
 uint64
@@ -699,59 +463,31 @@ sys_chdir(void)
 {
   char path[MAXPATH];
   struct inode *ip;
-  uint64 ret;
   struct proc *p = myproc();
-  struct proc_metrics *proc_metrics;
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-  proc_metrics->fs_metrics.n_write++;
 
   begin_op();
   if (argstr(0, path, MAXPATH) < 0 || (ip = namei(path)) == 0)
   {
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
   ilock(ip);
   if (ip->type != T_DIR)
   {
     iunlockput(ip);
     end_op();
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
   iunlock(ip);
   iput(p->cwd);
   end_op();
   p->cwd = ip;
-  ret = 0;
-  goto return_block;
-  // return 0;
-
-return_block:
-  xticks = p->ticks - xticks;
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-
-  return ret;
+  return 0;
 }
 
 uint64
 sys_exec(void)
 {
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  proc_metrics->io_metrics.num_io_calls++;
-  proc_metrics->fs_metrics.n_write++;
-
   char path[MAXPATH], *argv[MAXARG];
   int i;
   uint64 uargv, uarg;
@@ -759,9 +495,7 @@ sys_exec(void)
   argaddr(1, &uargv);
   if (argstr(0, path, MAXPATH) < 0)
   {
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
   memset(argv, 0, sizeof(argv));
   for (i = 0;; i++)
@@ -786,27 +520,17 @@ sys_exec(void)
       goto bad;
   }
 
-  ret = exec(path, argv);
+  int ret = exec(path, argv);
 
   for (i = 0; i < NELEM(argv) && argv[i] != 0; i++)
     kfree(argv[i]);
 
-  goto return_block;
+  return ret;
 
 bad:
   for (i = 0; i < NELEM(argv) && argv[i] != 0; i++)
     kfree(argv[i]);
-  ret = -1;
-  goto return_block;
-  // return -1;
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  // proc_metrics->io_metrics.total_ticks += xticks;
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-
-  return ret;
+  return -1;
 }
 
 uint64
@@ -817,22 +541,9 @@ sys_pipe(void)
   int fd0, fd1;
   struct proc *p = myproc();
 
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  // proc_metrics->io_metrics.num_io_calls++;
-  proc_metrics->fs_metrics.n_write++;
-
   argaddr(0, &fdarray);
   if (pipealloc(&rf, &wf) < 0)
-  {
-    ret = -1;
-    goto return_block;
-    // return -1;
-  }
+    return -1;
   fd0 = -1;
   if ((fd0 = fdalloc(rf)) < 0 || (fd1 = fdalloc(wf)) < 0)
   {
@@ -840,9 +551,7 @@ sys_pipe(void)
       p->ofile[fd0] = 0;
     fileclose(rf);
     fileclose(wf);
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
   if (copyout(p->pagetable, fdarray, (char *)&fd0, sizeof(fd0)) < 0 ||
       copyout(p->pagetable, fdarray + sizeof(fd0), (char *)&fd1, sizeof(fd1)) < 0)
@@ -851,21 +560,9 @@ sys_pipe(void)
     p->ofile[fd1] = 0;
     fileclose(rf);
     fileclose(wf);
-    ret = -1;
-    goto return_block;
-    // return -1;
+    return -1;
   }
-  ret = 0;
-  goto return_block;
-  // return 0;
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  // proc_metrics->io_metrics.total_ticks += xticks;
-  proc_metrics->fs_metrics.total_ticks_write += xticks;
-
-  return ret;
+  return 0;
 }
 
 uint64
@@ -876,24 +573,11 @@ sys_lseek(void)
   uint64 offset;
   int whence;
 
-  uint64 ret;
-  struct proc_metrics *proc_metrics;
-  struct proc *p = myproc();
-  proc_metrics = get_proc_metrics(p->pid);
-
-  uint xticks = p->ticks;
-
-  // proc_metrics->io_metrics.num_io_calls++;
-  proc_metrics->fs_metrics.n_read++;
-
   argint(1, (int *)&offset);
   argint(2, &whence);
 
   if (argfd(0, &fd, &f) < 0 || whence < 0 || offset < 0)
-  {
-    ret = -1;
-    goto return_block;
-  }
+    return -1;
 
   switch (whence)
   {
@@ -903,10 +587,7 @@ sys_lseek(void)
 
   case SEEK_CUR:
     if (f->off + offset < 0)
-    {
-      ret = -1;
-      goto return_block;
-    }
+      return -1;
     f->off += offset;
     break;
 
@@ -915,17 +596,8 @@ sys_lseek(void)
     break;
 
   default:
-    ret = -1;
-    goto return_block;
+    return -1;
   }
 
-  ret = f->off;
-
-return_block:
-  xticks = p->ticks - xticks;
-
-  // proc_metrics->io_metrics.total_ticks += xticks;
-  proc_metrics->fs_metrics.total_ticks_read += xticks;
-
-  return ret;
+  return f->off;
 }

@@ -178,12 +178,14 @@ sys_waitandgetmetrics(void) {
   uint64 addr1, addr2;
   argaddr(0, &addr1);
   argaddr(1, &addr2);
-  // printf("Waiting for pid, addr1: %ld, addr2: %ld\n", addr1, addr2);
   int pid = wait(addr1);
-
-  // printf("Copying metrics for pid: %d\n", pid);
 
   if (pid < 0 || copyout(myproc()->pagetable, addr2, (char *)get_proc_metrics(pid), sizeof(struct proc_metrics)) < 0)
     return -1;
   return pid;
+}
+
+uint64
+sys_uptimeproc(void) {
+  return myproc()->ticks;
 }

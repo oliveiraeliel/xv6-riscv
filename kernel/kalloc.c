@@ -8,6 +8,8 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "proc.h"
+#include "proc_metrics.h"
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -44,7 +46,7 @@ freerange(void *pa_start, void *pa_end)
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree(void *pa)
+kfree_(void *pa)
 {
   struct run *r;
 
@@ -62,11 +64,25 @@ kfree(void *pa)
   release(&kmem.lock);
 }
 
+void
+kfree(void *pa)
+{
+  struct proc *p = myproc();
+  if (p != 0) {
+    struct proc_metrics *metrics = get_proc_metrics(p->pid);
+    uint64 time = r_time();
+    kfree_(pa);
+    metrics->mem_metrics.n_free++;
+    metrics->mem_metrics.total_cycles_free += r_time() - time;
+  } else 
+    kfree_(pa);
+}
+
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
 void *
-kalloc(void)
+kalloc_(void)
 {
   struct run *r;
 
@@ -79,4 +95,19 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+void *
+kalloc(void)
+{
+  struct proc *p = myproc();
+  if (p != 0) {
+    struct proc_metrics *metrics = get_proc_metrics(p->pid);
+    uint64 time = r_time();
+    void *ret = kalloc_();
+    metrics->mem_metrics.n_alloc++;
+    metrics->mem_metrics.total_cycles_alloc += r_time() - time;
+    return ret;
+  }
+  return kalloc_();
 }

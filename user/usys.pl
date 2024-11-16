@@ -41,3 +41,4 @@ entry("getprocmetrics");
 entry("observeprocputs");
 entry("getprocputs");
 entry("waitandgetmetrics");
+entry("uptimeproc");

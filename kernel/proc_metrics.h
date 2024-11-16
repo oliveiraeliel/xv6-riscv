@@ -1,14 +1,6 @@
 #include "types.h"
 #include "param.h"
 
-// #define NPROC 1000
-
-struct io_latency_metrics
-{
-    int num_io_calls;   // numero de syscalls de IO
-    uint64 total_ticks; // total de ticks de syscalls de IO
-};
-
 struct fs_eficiency_metrics
 {
     int n_write;  // numero de syscalls write
@@ -33,9 +25,9 @@ struct memory_management_overhead
     int n_alloc;  // numero de allocs
     int n_free;   // numero de frees
 
-    uint64 total_ticks_access; // total de ticks de accesos a memoria
-    uint64 total_ticks_alloc;  // total de ticks nos allocs
-    uint64 total_ticks_free;   // total de ticks para frees
+    uint64 total_cycles_access; // total de cycles de accesos a memoria
+    uint64 total_cycles_alloc;  // total de cycles nos allocs
+    uint64 total_cycles_free;   // total de cycles para frees
 };
 
 struct proc_metrics
@@ -46,7 +38,6 @@ struct proc_metrics
     uint64 end_ticks;   // fim do processo
     uint64 ticks;
 
-    struct io_latency_metrics           io_metrics;     // metricas de IO
     struct fs_eficiency_metrics         fs_metrics;     // metricas de eficiencia de FS
     struct memory_management_overhead   mem_metrics;    // metricas de overhead de gerenciamento de memoria
     // struct throughput                   throughput;     // metricas de throughput

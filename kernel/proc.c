@@ -14,7 +14,7 @@ struct proc proc[NPROC];
 
 struct proc_metrics proc_metrics[NPROC];
 
-uint8 puts_table[NPROC];  // puts[i] é o número de vezes em que i processos foram encerrados em 1 segundo
+uint8 puts_table[NPROC]; // puts[i] é o número de vezes em que i processos foram encerrados em 1 segundo
 uint8 terminated_procs_current_sec;
 struct spinlock terminated_procs_current_sec_lock;
 struct proc *proc_to_observe_puts;
@@ -71,9 +71,6 @@ void init_proc_metrics(int pid)
   proc_metrics[pid].end_ticks = 0;
   proc_metrics[pid].ticks = 0;
 
-  proc_metrics[pid].io_metrics.num_io_calls = 0;
-  proc_metrics[pid].io_metrics.total_ticks = 0;
-
   proc_metrics[pid].fs_metrics.n_write = 0;
   proc_metrics[pid].fs_metrics.n_read = 0;
   proc_metrics[pid].fs_metrics.n_delete = 0;
@@ -84,9 +81,9 @@ void init_proc_metrics(int pid)
   proc_metrics[pid].mem_metrics.n_access = 0;
   proc_metrics[pid].mem_metrics.n_alloc = 0;
   proc_metrics[pid].mem_metrics.n_free = 0;
-  proc_metrics[pid].mem_metrics.total_ticks_access = 0;
-  proc_metrics[pid].mem_metrics.total_ticks_alloc = 0;
-  proc_metrics[pid].mem_metrics.total_ticks_free = 0;
+  proc_metrics[pid].mem_metrics.total_cycles_access = 0;
+  proc_metrics[pid].mem_metrics.total_cycles_alloc = 0;
+  proc_metrics[pid].mem_metrics.total_cycles_free = 0;
 }
 
 // initialize the proc table.
@@ -102,6 +99,7 @@ void procinit(void)
     p->state = UNUSED;
     p->kstack = KSTACK((int)(p - proc));
     p->ticks = 0;
+    p->priority = 0;
     init_proc_metrics(p->pid);
   }
 }
@@ -138,40 +136,25 @@ myproc(void)
 
 int allocpid()
 {
-  // acquire(&pid_lock);
-  // do
-  // {
-  //   nextpid = (nextpid >= NPROC) ? 1 : nextpid + 1;
-  // } while (proc[nextpid].state != ZOMBIE && proc[nextpid].state != UNUSED); // Função que verifica se o PID está em uso
-  // release(&pid_lock);
-
-  // return nextpid;
-  // int pid;
-
-  // acquire(&pid_lock);
-  // pid = nextpid;
-  // nextpid = nextpid + 1;
-  // release(&pid_lock);
-
-  // init_proc_metrics(pid);
-
-  // return pid;
   int pid;
   int trials = 0;
 
   acquire(&pid_lock);
-  do {
+  do
+  {
     pid = nextpid % NPROC;
     nextpid = nextpid + 1;
     trials++;
   } while (proc[pid].state != ZOMBIE && proc[pid].state != UNUSED && trials < NPROC);
   release(&pid_lock);
 
-  if (trials >= NPROC) 
+  if (trials >= NPROC)
     panic("allocpid: no free pid\n");
 
   init_proc_metrics(pid);
-
+  proc[pid].ticks = 0;
+  proc[pid].cicles = 0;
+  proc[pid].last_cycle = r_time();
   return pid;
 }
 
@@ -249,6 +232,13 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
   p->ticks = 0;
+  p->priority = 0;
+  p->sleep_time = 0;
+  p->sleep_end = 0;
+  p->sleep_start = 0;
+  p->niceness = 0;
+  p->cicles = 0;
+  p->last_cycle = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -424,20 +414,23 @@ void reparent(struct proc *p)
   }
 }
 
+int calculate_priority(struct proc *p);
+
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait().
 void exit(int status)
 {
   struct proc *p = myproc();
-
-  if (p->parent != 0 && p->parent == proc_to_observe_puts) {
+  if (p->parent != 0 && p->parent == proc_to_observe_puts)
+  {
     acquire(&terminated_procs_current_sec_lock);
     terminated_procs_current_sec++;
     release(&terminated_procs_current_sec_lock);
   }
 
   acquire(&tickslock);
+  proc_metrics[p->pid].ticks = p->ticks;
   proc_metrics[p->pid].end_ticks = ticks;
   release(&tickslock);
 
@@ -534,6 +527,19 @@ int wait(uint64 addr)
   }
 }
 
+int max(int a, int b)
+{
+  if (a > b)
+    return a;
+  else
+    return b;
+}
+
+int calculate_priority(struct proc *p)
+{
+  return p->sleep_time;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -547,6 +553,32 @@ void scheduler(void)
   struct cpu *c = mycpu();
 
   c->proc = 0;
+#ifdef OPTIMIZED
+  for (;;)
+  {
+    intr_on();
+
+    int found = 0;
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      for (int i = 0; i < 5 && p->state == RUNNABLE; i++)
+      {
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
+        c->proc = 0;
+        found = 1;
+      }
+      release(&p->lock);
+    }
+    if (found == 0)
+    {
+      intr_on();
+      asm volatile("wfi");
+    }
+  }
+#else
   for (;;)
   {
     // The most recent process to run may have had interrupts
@@ -581,6 +613,7 @@ void scheduler(void)
       asm volatile("wfi");
     }
   }
+#endif
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -662,6 +695,7 @@ void sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  p->sleep_start = ticks;
 
   sched();
 
@@ -686,6 +720,15 @@ void wakeup(void *chan)
       acquire(&p->lock);
       if (p->state == SLEEPING && p->chan == chan)
       {
+        // p->sleep_time += ticks - p->sleep_start;
+        // p->sleep_time %= 50;
+        
+        // acquire(&higher_priority_proc.lock);
+        // if (!holding(&higher_priority_proc.lock)){
+          // if (p->sleep_time > higher_priority_proc.p->sleep_time)
+          //   higher_priority_proc.p = p;
+        // }
+        // release(&higher_priority_proc.lock);
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -801,16 +844,15 @@ void procdump(void)
 
 struct proc_metrics *get_proc_metrics(int pid)
 {
-  proc_metrics[pid].end_ticks = ticks;
-  proc_metrics[pid].ticks = proc[pid].ticks;
+  // proc_metrics[pid].end_ticks = ticks;
+  // printf("get_proc_metrics pid: %d    ticks: %ld\n", pid, proc[pid].ticks);
+  // proc_metrics[pid].ticks = proc[pid].ticks;
   return &proc_metrics[pid];
 }
 
 struct proc_metrics *get_my_proc_metrics()
 {
   struct proc *p = myproc();
-  proc_metrics[p->pid].end_ticks = ticks;
-  proc_metrics[p->pid].ticks = p->ticks;
   return &proc_metrics[p->pid];
 }
 
@@ -818,9 +860,8 @@ struct proc_metrics *get_my_proc_metrics()
 //   // return terminated_procs_at_second;
 // }
 
-
 // int *init_terminated_procs_at_second() {
-  
+
 // }
 
 // struct proc *getprocbypid(int pid)
@@ -852,7 +893,8 @@ void set_proc_to_observe_puts(struct proc *p)
   proc_to_observe_puts = p;
 }
 
-uint8 *get_puts_table(void) {
+uint8 *get_puts_table(void)
+{
   return puts_table;
 }
 

@@ -23,13 +23,14 @@ int getpid(void);
 char *sbrk(int);
 int sleep(int);
 int uptime(void);
+int uptimeproc(void);
 
 // syscalls que eu implementei:
 int lseek(int fd, int offset, int whence);
 int getprocmetrics(void *metrics);
 int observeprocputs(void);
-int getprocputs(uint8 *procputs, int);
-int waitandgetmetrics(int *, void *);
+int getprocputs(uint8 *procputs, int size);
+int waitandgetmetrics(int *status, struct proc_metrics *metrics);
 int getprocmetricsbypid(int pid, void *metrics);
 
 // ulib.c
