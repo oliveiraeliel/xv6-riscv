@@ -14,7 +14,7 @@ void generate_random_line()
         char c = 32 + rand_() % 95;
         buffer[i] = c;
     }
-    buffer[LINE_SIZE - 1] = '\n'; // quebra de linha
+    buffer[LINE_SIZE - 1] = '\n';
 }
 
 int create_random_file(char *save_dir)

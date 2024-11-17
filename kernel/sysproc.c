@@ -96,45 +96,6 @@ sys_uptime(void)
 }
 
 uint64
-sys_getprocmetrics(void)
-{
-  struct proc *p;
-  uint64 addr;
-  argaddr(0, &addr);
-
-  if (addr < 0)
-    return -1;
-
-  p = myproc();
-
-  struct proc_metrics * metrics = get_my_proc_metrics(p->pid);
-
-  if (copyout(p->pagetable, addr, (char *)metrics, sizeof(*metrics)) < 0)
-    return -1;
-
-  return 0;
-}
-
-uint64
-sys_getprocmetricsbypid(void)
-{
-  uint64 pid;
-  uint64 addr;
-  argaddr(0, &addr);
-  argaddr(1, &pid);
-
-  if (addr < 0)
-    return -1;
-
-  // struct proc_metrics *metrics = get_proc_metrics(pid);
-
-  // if (copyout(p->pagetable, addr, (char *)metrics, sizeof(*metrics)) < 0)
-  //   return -1;
-
-  return 0;
-}
-
-uint64
 sys_observeprocputs(void)
 {
   struct proc *p = myproc();
@@ -183,9 +144,4 @@ sys_waitandgetmetrics(void) {
   if (pid < 0 || copyout(myproc()->pagetable, addr2, (char *)get_proc_metrics(pid), sizeof(struct proc_metrics)) < 0)
     return -1;
   return pid;
-}
-
-uint64
-sys_uptimeproc(void) {
-  return myproc()->ticks;
 }

@@ -21,9 +21,6 @@
 #define SYS_mkdir               20
 #define SYS_close               21
 #define SYS_lseek               22
-#define SYS_getprocmetrics      23
-#define SYS_observeprocputs     24
-#define SYS_getprocputs         25
-#define SYS_waitandgetmetrics   26
-#define SYS_getprocmetricsbypid 27
-#define SYS_uptimeproc          28
+#define SYS_observeprocputs     23
+#define SYS_getprocputs         24
+#define SYS_waitandgetmetrics   25

@@ -74,11 +74,17 @@ int main(int argc, char *argv[])
                 printf("Error on waitandgetmetrics\n");
                 exit(1);
             }
+
+            if (status != 0)
+            {
+                printf("Error on child process\n");
+                exit(1);
+            }
         }
 
         getprocputs(puts_table, NUM_PROCS);
 
-        perform = compute_metrics(&metrics[i], raw_metrics, NUM_PROCS, puts_table, 1);
+        perform = compute_metrics(&metrics[i], raw_metrics, NUM_PROCS, puts_table, 0);
         avg_perform += perform / ROUNDS;
         if (i < 9)
             printf("# Round:  %d/%d        |      # System Performance: ", i + 1, ROUNDS);
@@ -130,9 +136,8 @@ uint64 proc_fairness(struct proc_metrics *metrics, int size)
     uint64 s2x = 0, sx2 = 0, x;
     for (int i = 0; i < size; i++)
     {
-        // printf("ticks_: %ld     %d\n", metrics[i].ticks, metrics[i].fs_metrics.n_write);
-        // x = metrics[i].ticks;
-        x = metrics[i].end_ticks - metrics[i].start_ticks;
+        // x = metrics[i].end_ticks - metrics[i].start_ticks;
+        x = metrics[i].ticks;
         s2x += x;
         sx2 += x * x;
     }
@@ -163,7 +168,7 @@ uint64 mem_overhead(struct proc_metrics *metrics, int size)
         total_alloc += metrics[i].mem_metrics.total_cycles_alloc;
         total_free += metrics[i].mem_metrics.total_cycles_free;
     }
-    uint64 factor = 1000000;
+    uint64 factor = 100000;
     return ((FIXED_PRECISION * factor) / (total_access + total_alloc + total_free));
 }
 

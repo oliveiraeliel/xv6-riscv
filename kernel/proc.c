@@ -71,16 +71,10 @@ void init_proc_metrics(int pid)
   proc_metrics[pid].end_ticks = 0;
   proc_metrics[pid].ticks = 0;
 
-  proc_metrics[pid].fs_metrics.n_write = 0;
-  proc_metrics[pid].fs_metrics.n_read = 0;
-  proc_metrics[pid].fs_metrics.n_delete = 0;
   proc_metrics[pid].fs_metrics.total_ticks_write = 0;
   proc_metrics[pid].fs_metrics.total_ticks_read = 0;
   proc_metrics[pid].fs_metrics.total_ticks_delete = 0;
 
-  proc_metrics[pid].mem_metrics.n_access = 0;
-  proc_metrics[pid].mem_metrics.n_alloc = 0;
-  proc_metrics[pid].mem_metrics.n_free = 0;
   proc_metrics[pid].mem_metrics.total_cycles_access = 0;
   proc_metrics[pid].mem_metrics.total_cycles_alloc = 0;
   proc_metrics[pid].mem_metrics.total_cycles_free = 0;
@@ -99,7 +93,6 @@ void procinit(void)
     p->state = UNUSED;
     p->kstack = KSTACK((int)(p - proc));
     p->ticks = 0;
-    p->priority = 0;
     init_proc_metrics(p->pid);
   }
 }
@@ -153,8 +146,6 @@ int allocpid()
 
   init_proc_metrics(pid);
   proc[pid].ticks = 0;
-  proc[pid].cicles = 0;
-  proc[pid].last_cycle = r_time();
   return pid;
 }
 
@@ -232,13 +223,6 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
   p->ticks = 0;
-  p->priority = 0;
-  p->sleep_time = 0;
-  p->sleep_end = 0;
-  p->sleep_start = 0;
-  p->niceness = 0;
-  p->cicles = 0;
-  p->last_cycle = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -414,8 +398,6 @@ void reparent(struct proc *p)
   }
 }
 
-int calculate_priority(struct proc *p);
-
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait().
@@ -525,19 +507,6 @@ int wait(uint64 addr)
     // Wait for a child to exit.
     sleep(p, &wait_lock); // DOC: wait-sleep
   }
-}
-
-int max(int a, int b)
-{
-  if (a > b)
-    return a;
-  else
-    return b;
-}
-
-int calculate_priority(struct proc *p)
-{
-  return p->sleep_time;
 }
 
 // Per-CPU process scheduler.
@@ -695,7 +664,6 @@ void sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  p->sleep_start = ticks;
 
   sched();
 
@@ -720,15 +688,6 @@ void wakeup(void *chan)
       acquire(&p->lock);
       if (p->state == SLEEPING && p->chan == chan)
       {
-        // p->sleep_time += ticks - p->sleep_start;
-        // p->sleep_time %= 50;
-        
-        // acquire(&higher_priority_proc.lock);
-        // if (!holding(&higher_priority_proc.lock)){
-          // if (p->sleep_time > higher_priority_proc.p->sleep_time)
-          //   higher_priority_proc.p = p;
-        // }
-        // release(&higher_priority_proc.lock);
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -844,9 +803,6 @@ void procdump(void)
 
 struct proc_metrics *get_proc_metrics(int pid)
 {
-  // proc_metrics[pid].end_ticks = ticks;
-  // printf("get_proc_metrics pid: %d    ticks: %ld\n", pid, proc[pid].ticks);
-  // proc_metrics[pid].ticks = proc[pid].ticks;
   return &proc_metrics[pid];
 }
 
@@ -855,31 +811,6 @@ struct proc_metrics *get_my_proc_metrics()
   struct proc *p = myproc();
   return &proc_metrics[p->pid];
 }
-
-// int *get_terminated_procs_at_second() {
-//   // return terminated_procs_at_second;
-// }
-
-// int *init_terminated_procs_at_second() {
-
-// }
-
-// struct proc *getprocbypid(int pid)
-// {
-//   return &proc[pid];
-// }
-
-// void compute_terminated_procs(void)
-// {
-//   int terminated;
-//   for (int i = 0; i < observedprocs_size; i++) {
-//     if (observedprocs[i] != 0){
-//       terminated = proc_metrics[observedprocs[i].pid].throughput.terminated_last_second;
-//       proc_metrics[observedprocs[i].pid].throughput.puts[terminated]++;
-//       proc_metrics[observedprocs[i].pid].throughput.terminated_last_second = 0;
-//     }
-//   }
-// }
 
 void init_puts_table()
 {

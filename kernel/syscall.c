@@ -135,12 +135,9 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]                 sys_mkdir,
 [SYS_close]                 sys_close,
 [SYS_lseek]                 sys_lseek,
-[SYS_getprocmetrics]        sys_getprocmetrics,
 [SYS_observeprocputs]       sys_observeprocputs,
 [SYS_getprocputs]           sys_getprocputs,
 [SYS_waitandgetmetrics]     sys_waitandgetmetrics,
-[SYS_getprocmetricsbypid]   sys_getprocmetricsbypid,
-[SYS_uptimeproc]            sys_uptimeproc,
 };
 
 void handle_time(int syscall_num, uint64 time, struct proc *p)
@@ -152,7 +149,6 @@ void handle_time(int syscall_num, uint64 time, struct proc *p)
   case SYS_read:
   case SYS_lseek:
   case SYS_fstat:
-    proc_metrics->fs_metrics.n_read++;
     proc_metrics->fs_metrics.total_ticks_read += time;
     break;
 
@@ -165,13 +161,11 @@ void handle_time(int syscall_num, uint64 time, struct proc *p)
   case SYS_exec:
   case SYS_dup:
   case SYS_link:
-    proc_metrics->fs_metrics.n_write++;
     proc_metrics->fs_metrics.total_ticks_write += time;
     break;
 
   case SYS_close:
   case SYS_unlink:
-    proc_metrics->fs_metrics.n_delete++;
     proc_metrics->fs_metrics.total_ticks_delete += time;
     break;
 

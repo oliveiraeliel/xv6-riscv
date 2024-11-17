@@ -72,7 +72,6 @@ kfree(void *pa)
     struct proc_metrics *metrics = get_proc_metrics(p->pid);
     uint64 time = r_time();
     kfree_(pa);
-    metrics->mem_metrics.n_free++;
     metrics->mem_metrics.total_cycles_free += r_time() - time;
   } else 
     kfree_(pa);
@@ -105,7 +104,6 @@ kalloc(void)
     struct proc_metrics *metrics = get_proc_metrics(p->pid);
     uint64 time = r_time();
     void *ret = kalloc_();
-    metrics->mem_metrics.n_alloc++;
     metrics->mem_metrics.total_cycles_alloc += r_time() - time;
     return ret;
   }

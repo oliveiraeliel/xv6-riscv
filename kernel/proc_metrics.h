@@ -1,30 +1,17 @@
 #include "types.h"
 #include "param.h"
 
+
 struct fs_eficiency_metrics
 {
-    int n_write;  // numero de syscalls write
-    int n_read;   // numero de syscalls read
-    int n_delete; // numero de syscalls delete
-
     uint64 total_ticks_write;  // total de ticks de syscalls write
     uint64 total_ticks_read;   // total de ticks de syscalls read
     uint64 total_ticks_delete; // total de ticks de syscalls delete
 };
 
-struct throughput
-{
-    int pid;
-    int terminated_last_second; // numero de processos terminados no ultimo segundo
-    uint8 puts[NPROC];          // puts[i] é o número de vezes em que i processos foram encerrados em 1 segundo
-};
 
 struct memory_management_overhead
 {
-    int n_access; // numero de accesos a memoria
-    int n_alloc;  // numero de allocs
-    int n_free;   // numero de frees
-
     uint64 total_cycles_access; // total de cycles de accesos a memoria
     uint64 total_cycles_alloc;  // total de cycles nos allocs
     uint64 total_cycles_free;   // total de cycles para frees
@@ -40,7 +27,6 @@ struct proc_metrics
 
     struct fs_eficiency_metrics         fs_metrics;     // metricas de eficiencia de FS
     struct memory_management_overhead   mem_metrics;    // metricas de overhead de gerenciamento de memoria
-    // struct throughput                   throughput;     // metricas de throughput
 };
 
 

@@ -115,7 +115,6 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
     struct proc_metrics *metrics = get_proc_metrics(p->pid);
     uint64 time = r_time();
     pte_t *pte = walk_(pagetable, va, alloc);
-    metrics->mem_metrics.n_access++;
     metrics->mem_metrics.total_cycles_access += r_time() - time;
     return pte;
   }
@@ -153,7 +152,6 @@ walkaddr(pagetable_t pagetable, uint64 va)
     struct proc_metrics *metrics = get_proc_metrics(p->pid);
     uint64 time = r_time();
     uint64 pa = walkaddr_(pagetable, va);
-    metrics->mem_metrics.n_access++;
     metrics->mem_metrics.total_cycles_access += r_time() - time;
     return pa;
   }
@@ -269,19 +267,9 @@ uvmalloc_(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct p
 {
   char *mem;
   uint64 a;
-  // uint64 ticks;
-  // uint64 ret;
-  // struct proc_metrics *metrics;
-
-  // ticks = p->ticks;
-  // metrics = get_proc_metrics(p->pid);
 
   if (newsz < oldsz)
-  {
-    // ret = oldsz;
-    // goto return_block;
     return oldsz;
-  }
 
   oldsz = PGROUNDUP(oldsz);
   for (a = oldsz; a < newsz; a += PGSIZE)
@@ -290,8 +278,6 @@ uvmalloc_(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct p
     if (mem == 0)
     {
       uvmdealloc(pagetable, a, oldsz, p);
-      // ret = 0;
-      // goto return_block;
       return 0;
     }
     memset(mem, 0, PGSIZE);
@@ -299,20 +285,10 @@ uvmalloc_(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct p
     {
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz, p);
-      // ret = 0;
-      // goto return_block;
       return 0;
     }
   }
-  // ret = newsz;
-  // goto return_block;
   return newsz;
-// return_block:
-//   ticks = r_time() - time;
-
-//   metrics->mem_metrics.n_alloc++;
-//   metrics->mem_metrics.total_cycles_alloc += ticks;
-//   return ret;
 }
 
 uint64
@@ -333,18 +309,8 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct pr
 uint64
 uvmdealloc_(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
-  // uint64 ret;
-  // struct proc_metrics *metrics;
-  // uint64 ticks;
-  // ticks = p->ticks;
-  // metrics = get_proc_metrics(p->pid);
-
   if (newsz >= oldsz)
-  {
-    // ret = oldsz;
-    // goto return_block;
     return oldsz;
-  }
 
   if (PGROUNDUP(newsz) < PGROUNDUP(oldsz))
   {
@@ -352,14 +318,7 @@ uvmdealloc_(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
   }
 
-  // ret = newsz;
   return newsz;
-// return_block:
-//   ticks = r_time() - time;
-
-//   metrics->mem_metrics.total_cycles_free += ticks;
-//   metrics->mem_metrics.n_free++;
-//   return ret;
 }
 
 
@@ -461,26 +420,16 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
   pte_t *pte;
-  // int ret;
-  // struct proc *p = myproc();
-  // struct proc_metrics *metrics = get_proc_metrics(p->pid);
 
-  // uint64 ticks = p->ticks;
   while (len > 0)
   {
     va0 = PGROUNDDOWN(dstva);
-    if (va0 >= MAXVA) {
-      // ret = -1;
-      // goto return_block;
+    if (va0 >= MAXVA)
       return -1;
-    }
     pte = walk(pagetable, va0, 0);
     if (pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
-        (*pte & PTE_W) == 0) {
-      // ret = -1;
-      // goto return_block;
+        (*pte & PTE_W) == 0)
       return -1;
-    }
     pa0 = PTE2PA(*pte);
     n = PGSIZE - (dstva - va0);
     if (n > len)
@@ -492,12 +441,6 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     dstva = va0 + PGSIZE;
   }
   return 0;
-//   ret = 0;
-// return_block:
-//   ticks = r_time() - time;
-//   metrics->mem_metrics.n_access++;
-//   metrics->mem_metrics.total_cycles_access += ticks;
-//   return ret;
 }
 
 // Copy from user to kernel.
@@ -506,21 +449,13 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
-  // int ret;
-  // struct proc *p = myproc();
-  // struct proc_metrics *metrics = get_proc_metrics(p->pid);
-
-  // uint64 ticks = p->ticks;
 
   while (len > 0)
   {
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
-    if (pa0 == 0) {
-      // ret = -1;
-      // goto return_block;
+    if (pa0 == 0)
       return -1;
-    }
     n = PGSIZE - (srcva - va0);
     if (n > len)
       n = len;
@@ -531,13 +466,6 @@ int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     srcva = va0 + PGSIZE;
   }
   return 0;
-  // ret = 0;
-
-// return_block:
-//   ticks = r_time() - time;
-//   metrics->mem_metrics.n_access++;
-//   metrics->mem_metrics.total_cycles_access += ticks;
-//   return ret;
 }
 
 // Copy a null-terminated string from user to kernel.
