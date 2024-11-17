@@ -35,6 +35,10 @@ filealloc(void)
   for(f = ftable.file; f < ftable.file + NFILE; f++){
     if(f->ref == 0){
       f->ref = 1;
+      f->cache_size = 0;
+      f->cache_page_size = 0;
+      f->cache_page_count = 0;
+      f->cached = 0;
       release(&ftable.lock);
       return f;
     }
@@ -178,5 +182,135 @@ filewrite(struct file *f, uint64 addr, int n)
   }
 
   return ret;
+}
+
+int filecachedread(struct file *f, uint64 addr, int n)
+{
+  if (f->cached == 0 || f->cache_page_count == 0)
+    return -1;
+
+  int i = 0;
+  while (i < n)
+  {
+    int target_block = f->off / PGSIZE;
+
+    if (target_block >= f->cache_page_count)
+      return -1;
+
+    int remaining_bytes_on_block = (target_block + 1) * PGSIZE - f->off;
+    int bytes_to_read = n - i;
+
+    if (bytes_to_read > remaining_bytes_on_block)
+      bytes_to_read = remaining_bytes_on_block;
+
+    if (copyout(myproc()->pagetable, addr + i,
+                f->cache[target_block] + (f->off % PGSIZE), bytes_to_read) < 0)
+      return -1;
+
+    f->off += bytes_to_read;
+    i += bytes_to_read;
+  }
+
+  return i;
+}
+
+int filecachedwrite(struct file *f, uint64 addr, int n)
+{
+  if (f->cached == 0)
+    return -1;
+
+  if (f->cache_page_count == 0)
+  {
+    allocate_cache(f);
+    allocate_cache_page(f);
+  }
+
+  int i = 0;
+  while (i < n)
+  {
+    int target_block = f->off / PGSIZE;
+
+    if (target_block >= f->cache_page_count)
+      allocate_cache_page(f);
+
+    int remaining_bytes_on_block = (target_block + 1) * PGSIZE - f->off;
+    int bytes_to_write = n - i;
+
+    if (bytes_to_write > remaining_bytes_on_block)
+      bytes_to_write = remaining_bytes_on_block;
+
+    if (copyin(myproc()->pagetable,
+               f->cache[target_block] + (f->off % PGSIZE),
+               addr + i, bytes_to_write) < 0)
+      return -1;
+
+    f->off += bytes_to_write;
+    i += bytes_to_write;
+  }
+
+  if (f->off > f->cache_size)
+    f->cache_size = f->off;
+
+  return (i == n ? n : -1);
+}
+
+int filecachedflush(struct file *f)
+{
+  if (f->cached == 0)
+    return -1;
+
+  if (f->type != FD_INODE)
+    panic("filecachedflush: invalid file type");
+
+  int max = ((MAXOPBLOCKS - 1 - 1 - 2) / 2) * BSIZE;
+
+  for (int i = 0; i < f->cache_page_count; i++)
+  {
+    int block_offset = i * PGSIZE;
+    int bytes_remaining = PGSIZE;
+    int bytes_written = 0;
+
+    while (bytes_remaining > 0)
+    {
+      int n = bytes_remaining > max ? max : bytes_remaining;
+
+      begin_op();
+      ilock(f->ip);
+      int r = writei(f->ip, 0, (uint64)f->cache[i] + bytes_written, block_offset + bytes_written, n);
+      iunlock(f->ip);
+      end_op();
+
+      if (r <= 0)
+      {
+        printf("filecachedflush: error writing block %d\n", i);
+        return -1;
+      }
+
+      bytes_remaining -= r;
+      bytes_written += r;
+    }
+  }
+
+  for (int i = 0; i < f->cache_page_count; i++)
+    kfree((char *)f->cache[i]);
+  kfree((char *)f->cache);
+  f->cache = 0;
+  f->cache_page_count = 0;
+  f->cache_size = 0;
+
+  return 0;
+}
+
+void allocate_cache(struct file *f)
+{
+  f->cache = (char **)kalloc();
+  if (f->cache == 0)
+    panic("allocate_cache: Could not allocate memory for cache");
+}
+
+void allocate_cache_page(struct file *f) {
+  f->cache[f->cache_page_count] = (char *)kalloc();
+  if (f->cache[f->cache_page_count++] == 0)
+    panic("allocate_cache_page: Could not allocate memory for cache block");
 }
 

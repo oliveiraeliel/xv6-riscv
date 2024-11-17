@@ -9,6 +9,9 @@
         "fcntl.h": "c",
         "proc.h": "c",
         "proc_metrics.h": "c",
-        "spinlock.h": "c"
+        "spinlock.h": "c",
+        "memlayout.h": "c",
+        "syscall.h": "c",
+        "heap.h": "c"
     }
 }

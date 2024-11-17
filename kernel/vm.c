@@ -84,7 +84,7 @@ void kvminithart()
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
 pte_t *
-walk(pagetable_t pagetable, uint64 va, int alloc)
+walk_(pagetable_t pagetable, uint64 va, int alloc)
 {
   if (va >= MAXVA)
     panic("walk");
@@ -107,11 +107,25 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   return &pagetable[PX(0, va)];
 }
 
+pte_t *
+walk(pagetable_t pagetable, uint64 va, int alloc)
+{
+  struct proc *p = myproc();
+  if (p != 0){
+    struct proc_metrics *metrics = get_proc_metrics(p->pid);
+    uint64 time = r_time();
+    pte_t *pte = walk_(pagetable, va, alloc);
+    metrics->mem_metrics.total_cycles_access += r_time() - time;
+    return pte;
+  }
+  return walk_(pagetable, va, alloc);
+}
+
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
 uint64
-walkaddr(pagetable_t pagetable, uint64 va)
+walkaddr_(pagetable_t pagetable, uint64 va)
 {
   pte_t *pte;
   uint64 pa;
@@ -129,6 +143,21 @@ walkaddr(pagetable_t pagetable, uint64 va)
   pa = PTE2PA(*pte);
   return pa;
 }
+
+uint64
+walkaddr(pagetable_t pagetable, uint64 va)
+{
+  struct proc *p = myproc();
+  if (p != 0){
+    struct proc_metrics *metrics = get_proc_metrics(p->pid);
+    uint64 time = r_time();
+    uint64 pa = walkaddr_(pagetable, va);
+    metrics->mem_metrics.total_cycles_access += r_time() - time;
+    return pa;
+  }
+  return walkaddr_(pagetable, va);
+}
+
 
 // add a mapping to the kernel page table.
 // only used when booting.
@@ -234,23 +263,13 @@ void uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 uint64
-uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct proc *p)
+uvmalloc_(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct proc *p)
 {
   char *mem;
   uint64 a;
-  uint64 ticks;
-  uint64 ret;
-  struct proc_metrics *metrics;
-
-  ticks = p->ticks;
-  metrics = get_proc_metrics(p->pid);
 
   if (newsz < oldsz)
-  {
-    ret = oldsz;
-    goto return_block;
-    // return oldsz;
-  }
+    return oldsz;
 
   oldsz = PGROUNDUP(oldsz);
   for (a = oldsz; a < newsz; a += PGSIZE)
@@ -259,50 +278,39 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct pr
     if (mem == 0)
     {
       uvmdealloc(pagetable, a, oldsz, p);
-      ret = 0;
-      goto return_block;
-      // return 0;
+      return 0;
     }
     memset(mem, 0, PGSIZE);
     if (mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R | PTE_U | xperm) != 0)
     {
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz, p);
-      ret = 0;
-      goto return_block;
-      // return 0;
+      return 0;
     }
   }
-  ret = newsz;
-  goto return_block;
-  // return newsz;
-return_block:
-  ticks = p->ticks - ticks;
+  return newsz;
+}
 
-  metrics->mem_metrics.n_alloc++;
-  metrics->mem_metrics.total_ticks_alloc += ticks;
+uint64
+uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm, struct proc *p)
+{
+  struct proc_metrics *metrics = get_proc_metrics(p->pid);
+  uint64 time = r_time();
+  uint64 ret = uvmalloc_(pagetable, oldsz, newsz, xperm, p);
+  metrics->mem_metrics.total_cycles_alloc += r_time() - time;
   return ret;
 }
+
 
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
 // process size.  Returns the new process size.
 uint64
-uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, struct proc *p)
+uvmdealloc_(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
 {
-  uint64 ret;
-  struct proc_metrics *metrics;
-  uint64 ticks;
-  ticks = p->ticks;
-  metrics = get_proc_metrics(p->pid);
-
   if (newsz >= oldsz)
-  {
-    ret = oldsz;
-    goto return_block;
-    // return oldsz;
-  }
+    return oldsz;
 
   if (PGROUNDUP(newsz) < PGROUNDUP(oldsz))
   {
@@ -310,15 +318,19 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, struct proc *p)
     uvmunmap(pagetable, PGROUNDUP(newsz), npages, 1);
   }
 
-  ret = newsz;
-  // return newsz;
-return_block:
-  ticks = p->ticks - ticks;
+  return newsz;
+}
 
-  metrics->mem_metrics.total_ticks_free += ticks;
-  metrics->mem_metrics.n_free++;
+
+uint64
+uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, struct proc *p) {
+  struct proc_metrics *metrics = get_proc_metrics(p->pid);
+  uint64 time = r_time();
+  uint64 ret = uvmdealloc_(pagetable, oldsz, newsz);
+  metrics->mem_metrics.total_cycles_free += r_time() - time;
   return ret;
 }
+
 
 // Recursively free page-table pages.
 // All leaf mappings must already have been removed.

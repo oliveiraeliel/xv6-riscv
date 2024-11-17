@@ -4,100 +4,17 @@
 #include "kernel/proc_metrics.h"
 #include "kernel/fcntl.h"
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-
-#define MAX_NODES 200
-#define MAX_EDGE_WEIGHT 500
-#define NUM_GRAPHS 1000
 #define MIN_NODES 100
+#define MAX_NODES 200
+#define MAX_EDGE_WEIGHT 100
+#define NUM_GRAPHS 1000
 #define MAX_NODES 200
 #define MIN_EDGES 50
 #define MAX_EDGES 400
-#define INFINITY 1000000
+#define INFINITY 50000
 #define LEFT(i) (i * 2 + 1)
 #define RIGHT(i) (i * 2 + 2)
 #define PARENT(i) ((i - 1) / 2)
-
-static unsigned long seed = 0;
-
-unsigned int
-rand_()
-{
-    // const unsigned int a = 1103515245;
-    // const unsigned int c = 12345;
-    // const unsigned int m = 0x80000000;
-
-    // seed = (a * seed + c) % m;
-
-    // return seed;
-    long hi, lo, x;
-    x = (seed % 0x7ffffffe) + 1;
-    hi = x / 127773;
-    lo = x % 127773;
-    x = 16807 * lo - 2836 * hi;
-    if (x < 0)
-        x += 0x7fffffff;
-    x--;
-    seed = x;
-    return seed;
-}
-
-void srand_(unsigned long new_seed)
-{
-    seed = new_seed;
-}
-
-void read_metrics(const char *file_path, struct proc_metrics *metrics)
-{
-    int file = open(file_path, O_RDONLY);
-    if (file < 0)
-    {
-        printf("Could not open the file");
-        exit(1);
-    }
-
-    if (read(file, metrics, sizeof(struct proc_metrics)) < 0)
-    {
-        printf("Error reading from file");
-        close(file);
-        exit(1);
-    }
-
-    close(file);
-}
-
-void save_metrics(char *save_path, struct proc_metrics *metrics)
-{
-    int file;
-
-    file = open(save_path, O_RDWR | O_CREATE);
-
-    if (file <= 0)
-    {
-        printf("Could not create the file %s\n", save_path);
-        close(file);
-        exit(1);
-    }
-
-    if (write(file, metrics, sizeof(struct proc_metrics)) != sizeof(struct proc_metrics))
-    {
-        printf("Error on write\n");
-        close(file);
-        exit(1);
-    }
-
-    close(file);
-    // struct proc_metrics m;
-    // read_metrics(save_path, &m);
-
-    // if (strcmp(save_path, "1_0_CPUBOUND.metrics") == 0)
-    // {
-    //     printf("Total ticks: %ld\n", m.io_metrics.total_ticks);
-    //     printf("Total ticks read: %ld\n", m.fs_metrics.total_ticks_read);
-    // }
-}
 
 struct digraph
 {
@@ -152,6 +69,7 @@ struct list *new_list()
 struct list_node *new_list_node(int idx, int val)
 {
     struct list_node *list_node = malloc(sizeof(struct list_node));
+
     malloc_successfull_or_panic(list_node);
 
     list_node->val = val;
@@ -164,6 +82,7 @@ struct list_node *new_list_node(int idx, int val)
 struct min_heap *new_min_heap(int size)
 {
     struct min_heap *heap = malloc(sizeof(struct min_heap));
+
     malloc_successfull_or_panic(heap);
 
     heap->pos = malloc(sizeof(int) * size);
@@ -193,8 +112,10 @@ struct heap_node *new_heap_node(int idx, int val)
 void swap_vals_on_heap(struct min_heap *heap, int i, int j)
 {
     struct heap_node *aux = heap->v[j];
+
     int i_pos = heap->v[i]->idx, j_pos = heap->v[j]->idx;
     int idx_aux = heap->pos[i_pos];
+
     heap->v[j] = heap->v[i];
     heap->v[i] = aux;
     heap->pos[i_pos] = heap->pos[j_pos];
@@ -221,7 +142,7 @@ void fall_on_heap(struct min_heap *heap, int i)
 
     if (r < heap->size && heap->v[smallest]->val > heap->v[r]->val)
         smallest = r;
-
+    
     if (smallest != i)
     {
         swap_vals_on_heap(heap, i, smallest);
@@ -239,7 +160,6 @@ void update_key_value(struct min_heap *min_heap, int idx, int new_val)
     int l = LEFT(idx);
     int r = RIGHT(idx);
     int p = PARENT(idx);
-
     min_heap->v[idx]->val = new_val;
 
     if (idx > 0 && new_val < min_heap->v[p]->val)
@@ -284,7 +204,6 @@ struct heap_node *pop_heap(struct min_heap *heap)
     heap->v[heap->size] = 0;
 
     fall_on_heap(heap, 0);
-
     heap->pos[node->idx] = -1;
 
     return node;
@@ -310,6 +229,7 @@ void free_digraph(struct digraph *digraph)
     for (int i = 0; i < digraph->num_nodes; i++)
     {
         list_node = digraph->adj[i]->head;
+
         while (list_node)
         {
             list_node_aux = list_node;
@@ -319,6 +239,7 @@ void free_digraph(struct digraph *digraph)
         free(digraph->adj[i]);
     }
     free(digraph->adj);
+
     free(digraph);
 }
 
@@ -332,7 +253,9 @@ struct digraph *generate_random_digraph(int num_nodes, int num_edges, int *u, in
 
     struct digraph *digraph;
     int u_ = -1, v_ = -1;
+
     int **is_edge = malloc(num_nodes * sizeof(int *));
+
     malloc_successfull_or_panic(is_edge);
     for (int i = 0; i < num_nodes; i++)
     {
@@ -351,10 +274,11 @@ struct digraph *generate_random_digraph(int num_nodes, int num_edges, int *u, in
 
     for (int i = 0; i < num_nodes; i++)
         digraph->adj[i] = new_list();
-
-    for (int i = 0; i < num_edges; i++)
+    int failed = 0;
+    
+    for (int i = 0; i < num_edges && failed < 5; i++)
     {
-        int rand_u, rand_v, max_trials = 10;
+        int rand_u, rand_v, max_trials = 5;
         struct list_node *new_node;
 
         do
@@ -365,15 +289,17 @@ struct digraph *generate_random_digraph(int num_nodes, int num_edges, int *u, in
             while (rand_v == rand_u)
                 rand_v = rand_() % num_nodes;
             max_trials--;
-            if (max_trials == -1)
-                break;
-        } while (is_edge[rand_u][rand_v] != 0);
+        } while (is_edge[rand_u][rand_v] != 0 && max_trials != -1);
 
-        if (max_trials == -1)
+        if (max_trials == -1) {
+            failed++;
+            printf("Failed to generate a random graph\n");
             continue;
+        }
 
         is_edge[rand_u][rand_v] = 1;
         new_node = new_list_node(rand_v, rand_() % MAX_EDGE_WEIGHT);
+
         new_node->next = digraph->adj[rand_u]->head;
         digraph->adj[rand_u]->head = new_node;
         digraph->adj[rand_u]->size++;
@@ -393,7 +319,6 @@ struct digraph *generate_random_digraph(int num_nodes, int num_edges, int *u, in
     for (int i = 0; i < num_nodes; i++)
         free(is_edge[i]);
     free(is_edge);
-
     return digraph;
 }
 
@@ -423,7 +348,6 @@ int dijkstra(struct digraph *g, int u, int v, int *path)
         for (list_node = g->adj[heap_node->idx]->head; list_node; list_node = list_node->next)
         {
             int pos, relaxed_val;
-
             pos = min_heap->pos[list_node->idx];
             relaxed_val = list_node->val + heap_node->val;
             if (pos >= 0 && min_heap->v[pos]->val > relaxed_val)
@@ -457,14 +381,9 @@ void solve()
     num_nodes = rand_() % (MAX_NODES - MIN_NODES) + MIN_NODES;
     num_edges = rand_() % (MAX_EDGES - MIN_EDGES) + MIN_EDGES;
 
-    path = malloc(sizeof(int) * num_nodes);
-    memset(path, -1, sizeof(int) * num_nodes);
+    path = malloc(sizeof(uint) * num_nodes);
+    memset(path, -1, sizeof(uint) * num_nodes);
     malloc_successfull_or_panic(path);
-
-    // u = rand_() % num_nodes;
-    // do
-    //     v = rand_() % num_nodes;
-    // while (u == v && num_nodes > 1);
 
     digraph = generate_random_digraph(num_nodes, num_edges, &u, &v);
     dijkstra(digraph, u, v, path);
@@ -472,36 +391,22 @@ void solve()
     // if (dijkstra(digraph, u, v, path) == INFINITY)
     //     printf("There is no path from (%d) to (%d)\n", u, v);
     // else
-    //     print_path(u, v, path);
+    //     print_path(u, v, path);;
     free(path);
     free_digraph(digraph);
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc != 3)
+    if (argc != 2 && argc != 3)
     {
         printf("Invalid parameters.\n");
         exit(1);
     }
-    int pipe_fd = atoi(argv[2]);
+
     srand_(atoi(argv[1]));
     for (int i = 0; i < NUM_GRAPHS; i++)
         solve();
-        
-    struct proc_metrics metrics;
-    if (getprocmetrics(&metrics) < 0)
-    {
-        printf("Error on getprocmetrics\n");
-        exit(1);
-    }
-    // metrics.end_ticks = uptime();
-    if (pipe_fd != -1) 
-        if (write(pipe_fd, &metrics, sizeof(struct proc_metrics)) != sizeof(struct proc_metrics)) {
-            printf("Error writing to pipe\n");
-            close(pipe_fd);
-            exit(1);
-        }
-    close(pipe_fd);
+    // printf("All tests passed\n");
     exit(0);
 }

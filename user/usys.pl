@@ -37,4 +37,6 @@ entry("sbrk");
 entry("sleep");
 entry("uptime");
 entry("lseek");
-entry("getprocmetrics");
+entry("observeprocputs");
+entry("getprocputs");
+entry("waitandgetmetrics");

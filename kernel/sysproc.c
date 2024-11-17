@@ -96,21 +96,52 @@ sys_uptime(void)
 }
 
 uint64
-sys_getprocmetrics(void)
+sys_observeprocputs(void)
 {
-  struct proc *p;
+  struct proc *p = myproc();
+  init_puts_table();
+  set_proc_to_observe_puts(p);
+  return 0;
+}
+
+uint64
+sys_getprocputs(void)
+{
+  struct proc *p = myproc();
+  uint8 *puts_table;
   uint64 addr;
+  int num_procs;
+
   argaddr(0, &addr);
+  argint(1, &num_procs);
 
   if (addr < 0)
     return -1;
 
-  p = myproc();
+  for (;;) {
+    int sum = 0;
+    for (int i = 1; i < num_procs; i++)
+      sum += i * get_puts_table()[i];
+    if (sum == num_procs)
+      break;
+  }
 
-  struct proc_metrics * metrics = get_my_proc_metrics(p->pid);
+  puts_table = get_puts_table();
 
-  if (copyout(p->pagetable, addr, (char *)metrics, sizeof(*metrics)) < 0)
+  if (copyout(p->pagetable, addr, (char *)puts_table, sizeof(uint8) * NPROC) < 0)
     return -1;
-
+  
   return 0;
+}
+
+uint64
+sys_waitandgetmetrics(void) {
+  uint64 addr1, addr2;
+  argaddr(0, &addr1);
+  argaddr(1, &addr2);
+  int pid = wait(addr1);
+
+  if (pid < 0 || copyout(myproc()->pagetable, addr2, (char *)get_proc_metrics(pid), sizeof(struct proc_metrics)) < 0)
+    return -1;
+  return pid;
 }

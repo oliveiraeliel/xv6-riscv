@@ -26,7 +26,9 @@ int uptime(void);
 
 // syscalls que eu implementei:
 int lseek(int fd, int offset, int whence);
-void *getprocmetrics(void *metrics);
+int observeprocputs(void);
+int getprocputs(uint8 *procputs, int size);
+int waitandgetmetrics(int *status, struct proc_metrics *metrics);
 
 // ulib.c
 int stat(const char *, struct stat *);
@@ -44,13 +46,12 @@ int memcmp(const void *, const void *, uint);
 void *memcpy(void *, const void *, uint);
 char *strcat(char *dest, const char *src);
 
-// utils.c - minhas implementações
 // void int_to_str(int num, char *str);
 // void read_metrics(const char *file_path, struct proc_metrics *metrics);
 // void save_metrics(char *save_path, struct proc_metrics *metrics);
-// int rand();
-// void srand(unsigned long new_seed);
-// unsigned long get_seed();
+// utils.c - minhas implementações
+unsigned int rand_();
+void srand_(unsigned long new_seed);
 
 // umalloc.c
 void *malloc(uint);

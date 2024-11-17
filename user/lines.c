@@ -7,77 +7,14 @@
 
 char buffer[LINE_SIZE];
 
-static unsigned long seed = 0;
-
-unsigned int
-rand()
-{
-    const unsigned int a = 1103515245;
-    const unsigned int c = 12345;
-    const unsigned int m = 0x80000000;
-
-    seed = (a * seed + c) % m;
-
-    return seed;
-}
-
-void srand(unsigned long new_seed)
-{
-    seed = new_seed;
-}
-
-void read_metrics(const char *file_path, struct proc_metrics *metrics)
-{
-    int file = open(file_path, O_RDONLY);
-    if (file < 0)
-    {
-        printf("Could not open the file");
-        exit(1);
-    }
-
-    if (read(file, metrics, sizeof(struct proc_metrics)) < 0)
-    {
-        printf("Error reading from file");
-        close(file);
-        exit(1);
-    }
-
-    close(file);
-}
-
-void save_metrics(char *save_path, struct proc_metrics *metrics)
-{
-    int file;
-
-    file = open(save_path, O_RDWR | O_CREATE);
-
-    if (file <= 0)
-    {
-        printf("Could not create the file %s\n", save_path);
-        exit(1);
-    }
-
-    if (write(file, metrics, sizeof(struct proc_metrics)) < sizeof(struct proc_metrics))
-    {
-        printf("Error on write\n");
-        close(file);
-        exit(1);
-    }
-
-    close(file);
-
-    read_metrics(save_path, metrics);
-}
-
 void generate_random_line()
 {
-    for (int i = 0; i < LINE_SIZE - 2; i++)
+    for (int i = 0; i < LINE_SIZE - 1; i++)
     {
-        char c = 32 + rand() % 95;
+        char c = 32 + rand_() % 95;
         buffer[i] = c;
     }
-    buffer[LINE_SIZE - 2] = '\n'; // quebra de linha
-    buffer[LINE_SIZE - 1] = '\0'; // fim da string
+    buffer[LINE_SIZE - 1] = '\n';
 }
 
 int create_random_file(char *save_dir)
@@ -105,10 +42,10 @@ void swap_lines(int file)
     int offset1, offset2, temp;
     char buffer1[LINE_SIZE], buffer2[LINE_SIZE];
 
-    offset1 = rand() % MAX_LINES;
+    offset1 = rand_() % MAX_LINES;
 
     do
-        offset2 = rand() % MAX_LINES;
+        offset2 = rand_() % MAX_LINES;
     while (offset1 == offset2);
 
     offset1 *= (LINE_SIZE);
@@ -163,20 +100,18 @@ void swap_lines(int file)
     }
 }
 
-
 int main(int argc, char *argv[])
 {
-    if (argc != 4)
+    if (argc != 3)
     {
         printf("Invalid params\n");
         exit(1);
     }
 
     int file, seed;
-    int pipe_fd = atoi(argv[3]);
 
     seed = atoi(argv[1]);
-    srand(seed);
+    srand_(seed);
 
     file = create_random_file(argv[2]);
 
@@ -184,25 +119,7 @@ int main(int argc, char *argv[])
         swap_lines(file);
 
     close(file);
-
     unlink(argv[2]);
 
-    struct proc_metrics proc_metrics;
-    if (getprocmetrics(&proc_metrics) < 0)
-    {
-        printf("Error on getprocmetrics\n");
-        exit(1);
-    }
-
-    // proc_metrics.end_ticks = uptime();
-    // save_metrics(strcat(argv[2], ".metrics"), &proc_metrics);
-    if (pipe_fd != -1)
-        if (write(pipe_fd, &proc_metrics, sizeof(struct proc_metrics)) != sizeof(struct proc_metrics))
-        {
-            printf("Error writing to pipe\n");
-            close(pipe_fd);
-            exit(1);
-        }
-    close(pipe_fd);
     exit(0);
 }

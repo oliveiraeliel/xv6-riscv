@@ -168,6 +168,13 @@ clockintr()
   if(cpuid() == 0){
     acquire(&tickslock);
     ticks++;
+    if (get_proc_to_observe_puts() && ticks % 10 == 0)
+    {
+      acquire(&terminated_procs_current_sec_lock);
+      get_puts_table()[get_terminated_procs_current_sec()]++; 
+      set_terminated_procs_current_sec(0);
+      release(&terminated_procs_current_sec_lock);
+    }
     wakeup(&ticks);
     release(&tickslock);
   }

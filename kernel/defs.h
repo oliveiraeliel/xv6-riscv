@@ -33,9 +33,16 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
+int             filecachedwrite(struct file*, uint64, int n);
+int             filecachedread(struct file*, uint64, int n);
+int             filecachedflush(struct file*);
+int             filetocache(struct file*);
+void            allocate_cache(struct file *);
+void            allocate_cache_page(struct file *);
 
-// fs.c
-void            fsinit(int);
+    // fs.c
+    void
+    fsinit(int);
 int             dirlink(struct inode*, char*, uint);
 struct inode*   dirlookup(struct inode*, char*, uint*);
 struct inode*   ialloc(uint, short);
@@ -106,6 +113,14 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+int *           get_terminated_procs_at_second(void);
+void            init_puts_table(void);
+uint8 *         get_puts_table(void);
+void            set_proc_to_observe_puts(struct proc *);
+void            set_terminated_procs_current_sec(uint8);
+uint8           get_terminated_procs_current_sec(void);
+struct proc*    get_proc_to_observe_puts(void);
+extern struct spinlock terminated_procs_current_sec_lock;
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -184,6 +199,7 @@ void            plic_complete(int);
 void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
+
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

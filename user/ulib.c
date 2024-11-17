@@ -4,8 +4,6 @@
 #include "user/user.h"
 #include "kernel/proc_metrics.h"
 
-// static unsigned long seed = 0;
-
 //
 // wrapper so that it's OK if main() does not call exit().
 //
