@@ -1,7 +1,6 @@
 FROM debian:12-slim
 
 WORKDIR /usr/src/app
-#COPY . .
 
 RUN apt update && apt install -y git \
     build-essential \
@@ -12,7 +11,5 @@ RUN apt update && apt install -y git \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-# RUN make
 
 CMD [ "make", "qemu"]

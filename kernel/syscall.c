@@ -103,12 +103,9 @@ extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_lseek(void);
-extern uint64 sys_getprocmetrics(void);
 extern uint64 sys_observeprocputs(void);
 extern uint64 sys_getprocputs(void);
 extern uint64 sys_waitandgetmetrics(void);
-extern uint64 sys_getprocmetricsbypid(void);
-extern uint64 sys_uptimeproc(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -186,14 +183,8 @@ syscall(void)
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
     time = p->ticks;
-    // p->off_scheduler_time = 0;
-    // cycles = r_time();
     p->trapframe->a0 = syscalls[num]();
-    // uint64 endcycle = r_time();
-    // cycles = endcycle - p->off_scheduler_time - cycles;
     time = p->ticks - time;
-    // printf("cycles %ld\n", cycles);
-    // printf("r_time: %ld   p->last_cycle: %ld\n", r_time(), p->last_cycle);
     handle_time(num, time, p);
   } else {
     printf("%d %s: unknown sys call %d\n",
